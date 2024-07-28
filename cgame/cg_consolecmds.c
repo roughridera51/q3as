@@ -4,6 +4,7 @@
 // executed by a key binding
 
 #include "cg_local.h"
+#include "cg_q3as.h"			// q3as
 #ifdef MISSIONPACK
 #include "../ui/ui_shared.h"
 extern menuDef_t *menuScoreboard;
