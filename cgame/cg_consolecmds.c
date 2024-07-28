@@ -4,25 +4,28 @@
 // executed by a key binding
 
 #include "cg_local.h"
-#include "cg_q3as.h"			// q3as
-#include "../ui/ui_shared.h"
 #ifdef MISSIONPACK
+#include "../ui/ui_shared.h"
 extern menuDef_t *menuScoreboard;
 #endif
 
 
-
-void CG_TargetCommand_f( void ) {
+/*
+=================
+CG_TargetCommand_f
+=================
+*/
+static void CG_TargetCommand_f( void ) {
 	int		targetNum;
-	char	test[4];
+	char	cmd[4];
 
 	targetNum = CG_CrosshairPlayer();
-	if (!targetNum ) {
+	if ( targetNum == -1 ) {
 		return;
 	}
 
-	trap_Argv( 1, test, 4 );
-	trap_SendConsoleCommand( va( "gc %i %i", targetNum, atoi( test ) ) );
+	trap_Argv( 1, cmd, sizeof( cmd ) );
+	trap_SendConsoleCommand( va( "gc %i %i", targetNum, atoi( cmd ) ) );
 }
 
 
@@ -68,9 +71,9 @@ static void CG_Viewpos_f (void) {
 static void CG_ScoresDown_f( void ) {
 
 #ifdef MISSIONPACK
-		CG_BuildSpectatorString();
+	CG_BuildSpectatorString();
 #endif
-	if ( cg.scoresRequestTime + 2000 < cg.time ) {
+	if ( cg.scoresRequestTime + 2000 < cg.time && !cg.demoPlayback ) {
 		// the scores are more than two seconds out of data,
 		// so request new ones
 		cg.scoresRequestTime = cg.time;
@@ -87,18 +90,30 @@ static void CG_ScoresDown_f( void ) {
 		// is within two seconds
 		cg.showScores = qtrue;
 	}
+
+	CG_SetScoreCatcher( cg.showScores );
 }
 
+
 static void CG_ScoresUp_f( void ) {
+
+	if ( cgs.filterKeyUpEvent ) {
+		cgs.filterKeyUpEvent = qfalse;
+		return;
+	}
+
 	if ( cg.showScores ) {
 		cg.showScores = qfalse;
 		cg.scoreFadeTime = cg.time;
 	}
+
+	CG_SetScoreCatcher( cg.showScores );
 }
+
 
 #ifdef MISSIONPACK
 extern menuDef_t *menuScoreboard;
-void Menu_Reset();			// FIXME: add to right include file
+void Menu_Reset( void );			// FIXME: add to right include file
 
 static void CG_LoadHud_f( void) {
   char buff[1024];
@@ -161,6 +176,11 @@ static void CG_spLose_f( void) {
 
 #endif
 
+/*
+==================
+CG_TellTarget_f
+==================
+*/
 static void CG_TellTarget_f( void ) {
 	int		clientNum;
 	char	command[128];
@@ -171,11 +191,17 @@ static void CG_TellTarget_f( void ) {
 		return;
 	}
 
-	trap_Args( message, 128 );
-	Com_sprintf( command, 128, "tell %i %s", clientNum, message );
+	trap_Args( message, sizeof( message ) );
+	Com_sprintf( command, sizeof( command ), "tell %i %s", clientNum, message );
 	trap_SendClientCommand( command );
 }
 
+
+/*
+==================
+CG_TellAttacker_f
+==================
+*/
 static void CG_TellAttacker_f( void ) {
 	int		clientNum;
 	char	command[128];
@@ -186,11 +212,18 @@ static void CG_TellAttacker_f( void ) {
 		return;
 	}
 
-	trap_Args( message, 128 );
-	Com_sprintf( command, 128, "tell %i %s", clientNum, message );
+	trap_Args( message, sizeof( message ) );
+	Com_sprintf( command, sizeof( command ), "tell %i %s", clientNum, message );
 	trap_SendClientCommand( command );
 }
 
+
+#ifdef MISSIONPACK
+/*
+==================
+CG_VoiceTellTarget_f
+==================
+*/
 static void CG_VoiceTellTarget_f( void ) {
 	int		clientNum;
 	char	command[128];
@@ -201,11 +234,17 @@ static void CG_VoiceTellTarget_f( void ) {
 		return;
 	}
 
-	trap_Args( message, 128 );
-	Com_sprintf( command, 128, "vtell %i %s", clientNum, message );
+	trap_Args( message, sizeof( message ) );
+	Com_sprintf( command, sizeof( command ), "vtell %i %s", clientNum, message );
 	trap_SendClientCommand( command );
 }
 
+
+/*
+==================
+CG_VoiceTellAttacker_f
+==================
+*/
 static void CG_VoiceTellAttacker_f( void ) {
 	int		clientNum;
 	char	command[128];
@@ -216,12 +255,11 @@ static void CG_VoiceTellAttacker_f( void ) {
 		return;
 	}
 
-	trap_Args( message, 128 );
-	Com_sprintf( command, 128, "vtell %i %s", clientNum, message );
+	trap_Args( message, sizeof( message ) );
+	Com_sprintf( command, sizeof( command ), "vtell %i %s", clientNum, message );
 	trap_SendClientCommand( command );
 }
 
-#ifdef MISSIONPACK
 static void CG_NextTeamMember_f( void ) {
   CG_SelectNextPlayer();
 }
@@ -339,7 +377,7 @@ static void CG_TauntDeathInsult_f (void ) {
 }
 
 static void CG_TauntGauntlet_f (void ) {
-	trap_SendConsoleCommand("cmd vsay kill_guantlet\n");
+	trap_SendConsoleCommand("cmd vsay kill_gauntlet\n");
 }
 
 static void CG_TaskSuicide_f (void ) {
@@ -427,7 +465,7 @@ static void CG_Camera_f( void ) {
 
 
 typedef struct {
-	char	*cmd;
+	const char *cmd;
 	void	(*function)(void);
 } consoleCommand_t;
 
@@ -448,12 +486,12 @@ static consoleCommand_t	commands[] = {
 	{ "weapnext", CG_NextWeapon_f },
 	{ "weapprev", CG_PrevWeapon_f },
 	{ "weapon", CG_Weapon_f },
+	{ "tcmd", CG_TargetCommand_f },
 	{ "tell_target", CG_TellTarget_f },
 	{ "tell_attacker", CG_TellAttacker_f },
+#ifdef MISSIONPACK
 	{ "vtell_target", CG_VoiceTellTarget_f },
 	{ "vtell_attacker", CG_VoiceTellAttacker_f },
-	{ "tcmd", CG_TargetCommand_f },
-#ifdef MISSIONPACK
 	{ "loadhud", CG_LoadHud_f },
 	{ "nextTeamMember", CG_NextTeamMember_f },
 	{ "prevTeamMember", CG_PrevTeamMember_f },
@@ -481,10 +519,7 @@ static consoleCommand_t	commands[] = {
 #endif
 	{ "startOrbit", CG_StartOrbit_f },
 	//{ "camera", CG_Camera_f },
-	{ "loaddeferred", CG_LoadDeferredPlayers },
-	// begin q3as
-	{ "print", as_Echo_f },
-	// end q3as
+	{ "loaddeferred", CG_LoadDeferredPlayers }	
 };
 
 
@@ -502,7 +537,7 @@ qboolean CG_ConsoleCommand( void ) {
 
 	cmd = CG_Argv(0);
 
-	for ( i = 0 ; i < sizeof( commands ) / sizeof( commands[0] ) ; i++ ) {
+	for ( i = 0 ; i < ARRAY_LEN( commands ) ; i++ ) {
 		if ( !Q_stricmp( cmd, commands[i].cmd ) ) {
 			commands[i].function();
 			return qtrue;
@@ -524,7 +559,7 @@ so it can perform tab completion
 void CG_InitConsoleCommands( void ) {
 	int		i;
 
-	for ( i = 0 ; i < sizeof( commands ) / sizeof( commands[0] ) ; i++ ) {
+	for ( i = 0 ; i < ARRAY_LEN( commands ) ; i++ ) {
 		trap_AddCommand( commands[i].cmd );
 	}
 
@@ -536,6 +571,7 @@ void CG_InitConsoleCommands( void ) {
 	trap_AddCommand ("say");
 	trap_AddCommand ("say_team");
 	trap_AddCommand ("tell");
+#ifdef MISSIONPACK
 	trap_AddCommand ("vsay");
 	trap_AddCommand ("vsay_team");
 	trap_AddCommand ("vtell");
@@ -543,6 +579,7 @@ void CG_InitConsoleCommands( void ) {
 	trap_AddCommand ("vosay");
 	trap_AddCommand ("vosay_team");
 	trap_AddCommand ("votell");
+#endif
 	trap_AddCommand ("give");
 	trap_AddCommand ("god");
 	trap_AddCommand ("notarget");
