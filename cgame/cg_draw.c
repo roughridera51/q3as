@@ -49,7 +49,12 @@ int CG_Text_Width(const char *text, float scale, int limit) {
 		count = 0;
 		while (s && *s && count < len) {
 			if ( Q_IsColorString(s) ) {
-				s += 2;
+				// begin q3as - HTML color ^XRRGGBB
+				if ( *( s + 1 ) == 'X')
+					s += 8;
+				else
+					s += 2;
+				// end q3as
 				continue;
 			} else {
 				glyph = &font->glyphs[(int)*s]; // TTimo: FIXME: getting nasty warnings without the cast, hopefully this doesn't break the VM build
@@ -86,7 +91,12 @@ int CG_Text_Height(const char *text, float scale, int limit) {
 		count = 0;
 		while (s && *s && count < len) {
 			if ( Q_IsColorString(s) ) {
-				s += 2;
+				// begin q3as - HTML color ^XRRGGBB
+				if ( *( s + 1 ) == 'X')
+					s += 8;
+				else
+					s += 2;
+				// end q3as
 				continue;
 			} else {
 				glyph = &font->glyphs[(int)*s]; // TTimo: FIXME: getting nasty warnings without the cast, hopefully this doesn't break the VM build
@@ -137,11 +147,19 @@ void CG_Text_Paint(float x, float y, float scale, vec4_t color, const char *text
       //int yadj = Assets.textFont.glyphs[text[i]].bottom + Assets.textFont.glyphs[text[i]].top;
       //float yadj = scale * (Assets.textFont.glyphs[text[i]].imageHeight - Assets.textFont.glyphs[text[i]].height);
 			if ( Q_IsColorString( s ) ) {
+				// begin q3as - HTML color ^XRRBBBB
+				if ( *(s + 1) == 'X' )
+				{
+					as_parseHTMLColors( newColor, &*(s + 2) );
+					s += 8;
+				}
+				else
+				{
 				memcpy( newColor, g_color_table[ColorIndex(*(s+1))], sizeof( newColor ) );
 				newColor[3] = color[3];
 				trap_R_SetColor( newColor );
 				s += 2;
-				continue;
+				}continue;
 			} else {
 				float yadj = useScale * glyph->top;
 				if (style == ITEM_TEXTSTYLE_SHADOWED || style == ITEM_TEXTSTYLE_SHADOWEDMORE) {
@@ -2141,7 +2159,7 @@ static void CG_DrawCrosshairNames( void ) {
 //==============================================================================
 
 /*
-=================
+=================start here for remainder of q3as comparison
 CG_DrawSpectator
 =================
 */
