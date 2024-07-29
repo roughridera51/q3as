@@ -4,7 +4,7 @@
 // active (after loading) gameplay
 
 #include "cg_local.h"
-#include "cg_q3as.h
+#include "cg_q3as.h"
 
 #ifdef MISSIONPACK
 #include "../ui/ui_shared.h"
