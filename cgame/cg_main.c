@@ -230,7 +230,21 @@ void QDECL CG_Printf( const char *msg, ... ) {
 	ED_vsprintf (text, msg, argptr);
 	va_end (argptr);
 
-	trap_Print( text );
+	// begin q3as
+	if ( sta_hChatNewColors.integer ) {
+		as_printf( text, qfalse ) ;
+		return ;
+	} else {
+		char	buf[10];
+
+		trap_Cvar_VariableStringBuffer( "con_notifytime", buf, sizeof(buf));
+		if (atoi(buf) == -2) {
+			trap_Cvar_Set ("con_notifytime","3");
+		}
+	}
+	// end q3as
+
+	trap_Print( as_removeQ3ASColors ( text ) );
 }
 
 void QDECL CG_Error( const char *msg, ... ) {
@@ -674,7 +688,7 @@ static void CG_RegisterGraphics( void ) {
 	cgs.media.nailPuffShader = trap_R_RegisterShader( "nailtrail" );
 	cgs.media.blueProxMine = trap_R_RegisterModel( "models/weaphits/proxmineb.md3" );
 #endif
-	cgs.media.plasmaBallShader = trap_R_RegisterShader( "sprites/plasma1" );
+	//cgs.media.plasmaBallShader = trap_R_RegisterShader( "sprites/plasma1" );
 	cgs.media.bloodTrailShader = trap_R_RegisterShader( "bloodTrail" );
 	cgs.media.lagometerShader = trap_R_RegisterShader("lagometer" );
 	cgs.media.connectionShader = trap_R_RegisterShader( "disconnected" );
@@ -906,6 +920,7 @@ static void CG_RegisterGraphics( void ) {
 	trap_R_RegisterModel( "models/players/heads/janet/janet.md3" );
 
 #endif
+	as_registerGraphics();	
 	CG_ClearParticles ();
 /*
 	for (i=1; i<MAX_PARTICLES_AREAS; i++)
@@ -1448,10 +1463,18 @@ static const char *CG_FeederItemText(float feederID, int index, int column, qhan
 				if (team == -1) {
 					return "";
 				} else {
+					/* q3as - only show team task to your team or if you are a spectator
+					if ( team == cg.snap->ps.persistant[PERS_TEAM] ||
+						cg.snap->ps.persistant[PERS_TEAM] == TEAM_SPECTATOR)
+						*handle = CG_StatusHandle(info->teamTask);
+					else
+						return "";
+                                        */
 					*handle = CG_StatusHandle(info->teamTask);
 				}
 		  break;
 			case 2:
+				//q3as comment from here
 				if ( cg.snap->ps.stats[ STAT_CLIENTS_READY ] & ( 1 << sp->client ) ) {
 					return "Ready";
 				}
@@ -1468,6 +1491,7 @@ static const char *CG_FeederItemText(float feederID, int index, int column, qhan
 						return "Leader";
 					}
 				}
+				//return va("^3%2i^7", sp->client ); //q3as - comment out everything else in case 2 and uncomment this line
 			break;
 			case 3:
 				return info->name;
