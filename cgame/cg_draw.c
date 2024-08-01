@@ -2594,6 +2594,8 @@ static void CG_Draw2D( stereoFrame_t stereoFrame )
 		return;
 	}
 
+	as_drawPrintBuffer();
+
 	if ( cg.snap->ps.pm_type == PM_INTERMISSION ) {
 		CG_DrawIntermission();
 		return;
@@ -2605,15 +2607,22 @@ static void CG_Draw2D( stereoFrame_t stereoFrame )
 	}
 */
 	if ( cg.snap->ps.persistant[PERS_TEAM] == TEAM_SPECTATOR ) {
-		CG_DrawSpectator();
-		CG_DrawCrosshair();
-		CG_DrawCrosshairNames();
+		//CG_DrawSpectator();
+		as_drawSpectator();
+		//CG_DrawCrosshair();
+		as_drawCrosshair();
+		//CG_DrawCrosshairNames();
+		as_drawCrosshairNames();
 	} else {
 		// don't draw any status if dead or the scoreboard is being explicitly shown
 		if ( !cg.showScores && cg.snap->ps.stats[STAT_HEALTH] > 0 ) {
 
 #ifdef MISSIONPACK
 			if ( cg_drawStatus.integer ) {
+				// begin q3as
+				if ( sta_hAutoTeamInfo.integer ){
+					as_findFlagCarrier();
+				}// end q3as
 				Menu_PaintAll();
 				CG_DrawTimedMenus();
 			}
@@ -2626,8 +2635,10 @@ static void CG_Draw2D( stereoFrame_t stereoFrame )
 #ifdef MISSIONPACK
 			CG_DrawProxWarning();
 #endif      
-			CG_DrawCrosshair();
-			CG_DrawCrosshairNames();
+			// q3as CG_DrawCrosshair();
+			as_drawCrosshair();		// q3as
+			//q3as CG_DrawCrosshairNames();
+			as_drawCrosshairNames();
 			CG_DrawWeaponSelect();
 
 #ifndef MISSIONPACK
@@ -2652,10 +2663,20 @@ static void CG_Draw2D( stereoFrame_t stereoFrame )
 
 #ifdef MISSIONPACK
 	if (!cg_paused.integer) {
-		CG_DrawUpperRight(stereoFrame);
+		// q3as CG_DrawUpperRight(stereoFrame);
+		// begin q3as
+		as_drawUpperRight(stereoFrame);
+		as_drawLowerRight();
+		as_drawLowerLeft();
+		// end q3as
 	}
 #else
-	CG_DrawUpperRight(stereoFrame);
+	//q3as CG_DrawUpperRight(stereoFrame);
+	// begin q3as
+	as_drawUpperRight(stereoFrame);
+	as_drawLowerRight();
+	as_drawLowerLeft();
+	// end q3as
 #endif
 
 #ifndef MISSIONPACK
@@ -2663,7 +2684,8 @@ static void CG_Draw2D( stereoFrame_t stereoFrame )
 	CG_DrawLowerLeft();
 #endif
 
-	if ( !CG_DrawFollow() ) {
+	// q3as if ( !CG_DrawFollow() ) {
+	if ( !as_drawFollow() ) {		// q3as
 		CG_DrawWarmup();
 	}
 
