@@ -3,7 +3,7 @@
 // cg_info.c -- display information while data is being loading
 
 #include "cg_local.h"
-#include "cg_q3as.h"	// q3as
+#include "cg_q3as.h"
 
 #define MAX_LOADING_PLAYER_ICONS	16
 #define MAX_LOADING_ITEM_ICONS		26
@@ -19,14 +19,6 @@ static qhandle_t	loadingItemIcons[MAX_LOADING_ITEM_ICONS];
 CG_DrawLoadingIcons
 ===================
 */
-
-// begin q3as - we disable CG_DrawLoadingIcons below and use our own version
-static void CG_DrawLoadingIcons( void ) {
-	as_drawLoadingIcons(loadingPlayerIconCount, loadingItemIconCount,
-		loadingPlayerIcons, loadingItemIcons);
-}
-
-#if 0
 static void CG_DrawLoadingIcons( void ) {
 	int		n;
 	int		x, y;
@@ -46,8 +38,6 @@ static void CG_DrawLoadingIcons( void ) {
 		CG_DrawPic( x, y, 32, 32, loadingItemIcons[n] );
 	}
 }
-#endif
-// end q3as
 
 
 /*
@@ -57,8 +47,15 @@ CG_LoadingString
 ======================
 */
 void CG_LoadingString( const char *s ) {
-	Q_strncpyz( cg.infoScreenText, s, sizeof( cg.infoScreenText ) );
+	int i;
+	Q_strncpyz( cg.infoScreenText, DecodedString( (char *)s ), sizeof( cg.infoScreenText ) );
 
+	for ( i=0; i < sizeof( cg.infoScreenText ); i++ ) {
+		if ( !cg.infoScreenText[i] ) 
+			break;
+		// convert to normal unless UI font will support extended characters 
+		cg.infoScreenText[i]&=127;
+	}
 	trap_UpdateScreen();
 }
 
@@ -73,7 +70,8 @@ void CG_LoadingItem( int itemNum ) {
 	item = &bg_itemlist[itemNum];
 	
 	if ( item->icon && loadingItemIconCount < MAX_LOADING_ITEM_ICONS ) {
-		loadingItemIcons[loadingItemIconCount++] = trap_R_RegisterShaderNoMip( item->icon );
+		loadingItemIcons[loadingItemIconCount] = trap_R_RegisterShaderNoMip( item->icon );
+		loadingItemIconCount++;
 	}
 
 	CG_LoadingString( item->pickup_name );
@@ -118,10 +116,10 @@ void CG_LoadingClient( int clientNum ) {
 		}
 	}
 
-	Q_strncpyz( personality, Info_ValueForKey( info, "n" ), sizeof(personality) );
-	Q_CleanStr( personality );
+	BG_CleanName( Info_ValueForKey( info, "n" ), personality, sizeof( personality ), "unknown client" );
+	BG_StripColor( personality );
 
-	if( cgs.gametype == GT_SINGLE_PLAYER ) {
+	if ( cgs.gametype == GT_SINGLE_PLAYER ) {
 		trap_S_RegisterSound( va( "sound/player/announce/%s.wav", personality ), qtrue );
 	}
 
@@ -145,6 +143,7 @@ void CG_DrawInformation( void ) {
 	qhandle_t	levelshot;
 	qhandle_t	detail;
 	char		buf[1024];
+	char		*ptr;
 
 	info = CG_ConfigString( CS_SERVERINFO );
 	sysInfo = CG_ConfigString( CS_SYSTEMINFO );
@@ -154,8 +153,10 @@ void CG_DrawInformation( void ) {
 	if ( !levelshot ) {
 		levelshot = trap_R_RegisterShaderNoMip( "menu/art/unknownmap" );
 	}
+
 	trap_R_SetColor( NULL );
-	CG_DrawPic( 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, levelshot );
+	// fill whole screen, not just 640x480 virtual rectangle
+	trap_R_DrawStretchPic( 0, 0, cgs.glconfig.vidWidth, cgs.glconfig.vidHeight, 0, 0, 1, 1, levelshot );
 
 	// blend a detail texture over it
 	detail = trap_R_RegisterShader( "levelShotDetail" );
@@ -179,20 +180,37 @@ void CG_DrawInformation( void ) {
 	y = 180-32;
 
 	// don't print server lines if playing a local game
-	trap_Cvar_VariableStringBuffer( "sv_running", buf, sizeof( buf ) );
-	if ( !atoi( buf ) ) {
+	//trap_Cvar_VariableStringBuffer( "sv_running", buf, sizeof( buf ) );
+	//if ( !atoi( buf ) ) 
+	{
 		// server hostname
-		Q_strncpyz(buf, Info_ValueForKey( info, "sv_hostname" ), 1024);
-		Q_CleanStr(buf);
+		Q_strncpyz( buf, Info_ValueForKey( info, "sv_hostname" ), sizeof( buf ) );
+		Q_CleanStr( buf );
 		UI_DrawProportionalString( 320, y, buf,
 			UI_CENTER|UI_SMALLFONT|UI_DROPSHADOW, colorWhite );
 		y += PROP_HEIGHT;
 
+		buf[0] = '\0';
+		ptr = buf;
+
+		// unlagged server
+		s = Info_ValueForKey( info, "g_unlagged" );
+		if ( s[0] == '1' ) {
+			ptr = Q_stradd( ptr, "Unlagged" );
+		}
+
 		// pure server
 		s = Info_ValueForKey( sysInfo, "sv_pure" );
 		if ( s[0] == '1' ) {
-			UI_DrawProportionalString( 320, y, "Pure Server",
-				UI_CENTER|UI_SMALLFONT|UI_DROPSHADOW, colorWhite );
+			if ( buf[0] ) {
+				ptr = Q_stradd( ptr, ", " );
+			}
+			ptr = Q_stradd( ptr, "Pure" );
+		}
+
+		if ( buf[0] ) {
+			ptr = Q_stradd( ptr, " Server" );
+			UI_DrawProportionalString( 320, y, buf,	UI_CENTER|UI_SMALLFONT|UI_DROPSHADOW, colorWhite );
 			y += PROP_HEIGHT;
 		}
 
@@ -253,7 +271,8 @@ void CG_DrawInformation( void ) {
 		break;
 #endif
 	default:
-		s = "Unknown Gametype";
+		BG_sprintf( buf, "Gametype #%i", cgs.gametype );
+		s = buf;
 		break;
 	}
 	UI_DrawProportionalString( 320, y, s,
