@@ -4,7 +4,8 @@
 // of event processing
 
 #include "cg_local.h"
-#include "cg_q3as.h"			// q3as
+#include "cg_q3as.h"
+
 
 /*
 ==================
@@ -13,7 +14,7 @@ CG_BubbleTrail
 Bullets shot underwater
 ==================
 */
-void CG_BubbleTrail( vec3_t start, vec3_t end, float spacing ) {
+void CG_BubbleTrail( const vec3_t start, const vec3_t end, float spacing ) {
 	vec3_t		move;
 	vec3_t		vec;
 	float		len;
@@ -51,7 +52,10 @@ void CG_BubbleTrail( vec3_t start, vec3_t end, float spacing ) {
 		le->lifeRate = 1.0 / ( le->endTime - le->startTime );
 
 		re = &le->refEntity;
-		re->shaderTime = cg.time / 1000.0f;
+		if ( intShaderTime )
+			re->u.intShaderTime = cg.time;
+		else
+			re->u.shaderTime = cg.time / 1000.0f;
 
 		re->reType = RT_SPRITE;
 		re->rotation = 0;
@@ -102,7 +106,11 @@ localEntity_t *CG_SmokePuff( const vec3_t p, const vec3_t vel,
 	re = &le->refEntity;
 	re->rotation = Q_random( &seed ) * 360;
 	re->radius = radius;
-	re->shaderTime = startTime / 1000.0f;
+
+	if ( intShaderTime )
+		re->u.intShaderTime = startTime;
+	else
+		re->u.shaderTime = startTime / 1000.0f;
 
 	le->leType = LE_MOVE_SCALE_FADE;
 	le->startTime = startTime;
@@ -155,7 +163,7 @@ CG_SpawnEffect
 Player teleporting in or out
 ==================
 */
-void CG_SpawnEffect( vec3_t org ) {
+void CG_SpawnEffect( const vec3_t origin ) {
 	localEntity_t	*le;
 	refEntity_t		*re;
 
@@ -171,7 +179,11 @@ void CG_SpawnEffect( vec3_t org ) {
 	re = &le->refEntity;
 
 	re->reType = RT_MODEL;
-	re->shaderTime = cg.time / 1000.0f;
+
+	if ( intShaderTime )
+		re->u.intShaderTime = cg.time;
+	else
+		re->u.shaderTime = cg.time / 1000.0f;
 
 #ifndef MISSIONPACK
 	re->customShader = cgs.media.teleportEffectShader;
@@ -179,7 +191,8 @@ void CG_SpawnEffect( vec3_t org ) {
 	re->hModel = cgs.media.teleportEffectModel;
 	AxisClear( re->axis );
 
-	VectorCopy( org, re->origin );
+	VectorCopy( origin, re->origin );
+
 #ifdef MISSIONPACK
 	re->origin[2] += 16;
 #else
@@ -214,6 +227,7 @@ void CG_LightningBoltBeam( vec3_t start, vec3_t end ) {
 	beam->customShader = cgs.media.lightningShader;
 }
 
+
 /*
 ==================
 CG_KamikazeEffect
@@ -237,7 +251,11 @@ void CG_KamikazeEffect( vec3_t org ) {
 	re = &le->refEntity;
 
 	re->reType = RT_MODEL;
-	re->shaderTime = cg.time / 1000.0f;
+
+	if ( intShaderTime )
+		re->intShaderTime = cg.time;
+	else
+		re->shaderTime = cg.time / 1000.0f;
 
 	re->hModel = cgs.media.kamikazeEffectModel;
 
@@ -312,7 +330,11 @@ void CG_InvulnerabilityImpact( vec3_t org, vec3_t angles ) {
 	re = &le->refEntity;
 
 	re->reType = RT_MODEL;
-	re->shaderTime = cg.time / 1000.0f;
+
+	if ( intShaderTime )
+		re->u.intShaderTime = cg.time;
+	else
+		re->u.shaderTime = cg.time / 1000.0f;
 
 	re->hModel = cgs.media.invulnerabilityImpactModel;
 
@@ -352,7 +374,11 @@ void CG_InvulnerabilityJuiced( vec3_t org ) {
 	re = &le->refEntity;
 
 	re->reType = RT_MODEL;
-	re->shaderTime = cg.time / 1000.0f;
+
+	if ( intShaderTime )
+		re->u.intShaderTime = cg.time;
+	else
+		re->u.shaderTime = cg.time / 1000.0f;
 
 	re->hModel = cgs.media.invulnerabilityJuicedModel;
 
@@ -362,15 +388,15 @@ void CG_InvulnerabilityJuiced( vec3_t org ) {
 
 	trap_S_StartSound (org, ENTITYNUM_NONE, CHAN_BODY, cgs.media.invulnerabilityJuicedSound );
 }
-
 #endif
+
 
 /*
 ==================
 CG_ScorePlum
 ==================
 */
-void CG_ScorePlum( int client, vec3_t org, int score ) {
+void CG_ScorePlum( int client, const vec3_t origin, int score ) {
 	localEntity_t	*le;
 	refEntity_t		*re;
 	vec3_t			angles;
@@ -392,14 +418,13 @@ void CG_ScorePlum( int client, vec3_t org, int score ) {
 	le->color[0] = le->color[1] = le->color[2] = le->color[3] = 1.0;
 	le->radius = score;
 	
-	VectorCopy( org, le->pos.trBase );
-	if (org[2] >= lastPos[2] - 20 && org[2] <= lastPos[2] + 20) {
+	VectorCopy( origin, le->pos.trBase );
+	if ( origin[2] >= lastPos[2] - 20 && origin[2] <= lastPos[2] + 20 ) {
 		le->pos.trBase[2] -= 20;
 	}
 
 	//CG_Printf( "Plum origin %i %i %i -- %i\n", (int)org[0], (int)org[1], (int)org[2], (int)Distance(org, lastPos));
-	VectorCopy(org, lastPos);
-
+	VectorCopy(origin, lastPos);
 
 	re = &le->refEntity;
 
@@ -416,7 +441,7 @@ void CG_ScorePlum( int client, vec3_t org, int score ) {
 CG_MakeExplosion
 ====================
 */
-localEntity_t *CG_MakeExplosion( vec3_t origin, vec3_t dir, 
+localEntity_t *CG_MakeExplosion( const vec3_t origin, const vec3_t dir,
 								qhandle_t hModel, qhandle_t shader,
 								int msec, qboolean isSprite ) {
 	float			ang;
@@ -457,7 +482,10 @@ localEntity_t *CG_MakeExplosion( vec3_t origin, vec3_t dir,
 	ex->endTime = ex->startTime + msec;
 
 	// bias the time so all shader effects start correctly
-	ex->refEntity.shaderTime = ex->startTime / 1000.0f;
+	if ( intShaderTime )
+		ex->refEntity.u.intShaderTime = ex->startTime;
+	else
+		ex->refEntity.u.shaderTime = ex->startTime / 1000.0f;
 
 	ex->refEntity.hModel = hModel;
 	ex->refEntity.customShader = shader;
@@ -479,7 +507,7 @@ CG_Bleed
 This is the spurt of blood when a character gets hit
 =================
 */
-void CG_Bleed( vec3_t origin, int entityNum ) {
+void CG_Bleed( const vec3_t origin, int entityNum ) {
 	localEntity_t	*ex;
 
 	if ( !cg_blood.integer ) {
@@ -512,7 +540,7 @@ void CG_Bleed( vec3_t origin, int entityNum ) {
 CG_LaunchGib
 ==================
 */
-void CG_LaunchGib( vec3_t origin, vec3_t velocity, qhandle_t hModel ) {
+static void CG_LaunchGib( const vec3_t origin, const vec3_t velocity, qhandle_t hModel ) {
 	localEntity_t	*le;
 	refEntity_t		*re;
 
@@ -547,7 +575,7 @@ Generated a bunch of gibs launching out from the bodies location
 */
 #define	GIB_VELOCITY	250
 #define	GIB_JUMP		250
-void CG_GibPlayer( vec3_t playerOrigin ) {
+void CG_GibPlayer( const vec3_t playerOrigin ) {
 	vec3_t	origin, velocity;
 
 	if ( !cg_blood.integer ) {
@@ -626,7 +654,7 @@ void CG_GibPlayer( vec3_t playerOrigin ) {
 
 /*
 ==================
-CG_LaunchGib
+CG_LaunchExplode
 ==================
 */
 void CG_LaunchExplode( vec3_t origin, vec3_t velocity, qhandle_t hModel ) {
@@ -659,7 +687,7 @@ void CG_LaunchExplode( vec3_t origin, vec3_t velocity, qhandle_t hModel ) {
 #define	EXP_JUMP		150
 /*
 ===================
-CG_GibPlayer
+CG_BigExplode
 
 Generated a bunch of gibs launching out from the bodies location
 ===================
