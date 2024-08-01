@@ -15,7 +15,7 @@ tag location
 ======================
 */
 void CG_PositionEntityOnTag( refEntity_t *entity, const refEntity_t *parent, 
-							qhandle_t parentModel, char *tagName ) {
+							qhandle_t parentModel, const char *tagName ) {
 	int				i;
 	orientation_t	lerped;
 	
@@ -44,7 +44,7 @@ tag location
 ======================
 */
 void CG_PositionRotatedEntityOnTag( refEntity_t *entity, const refEntity_t *parent, 
-							qhandle_t parentModel, char *tagName ) {
+							qhandle_t parentModel, const char *tagName ) {
 	int				i;
 	orientation_t	lerped;
 	vec3_t			tempAxis[3];
@@ -82,7 +82,7 @@ CG_SetEntitySoundPosition
 Also called by event processing code
 ======================
 */
-void CG_SetEntitySoundPosition( centity_t *cent ) {
+void CG_SetEntitySoundPosition( const centity_t *cent ) {
 	if ( cent->currentState.solid == SOLID_BMODEL ) {
 		vec3_t	origin;
 		float	*v;
@@ -102,7 +102,7 @@ CG_EntityEffects
 Add continuous entity effects, like local entity emission and lighting
 ==================
 */
-static void CG_EntityEffects( centity_t *cent ) {
+static void CG_EntityEffects( const centity_t *cent ) {
 
 	// update sound origins
 	CG_SetEntitySoundPosition( cent );
@@ -120,15 +120,16 @@ static void CG_EntityEffects( centity_t *cent ) {
 
 
 	// constant light glow
-	if ( cent->currentState.constantLight ) {
+	if(cent->currentState.constantLight)
+	{
 		int		cl;
-		int		i, r, g, b;
+		float		i, r, g, b;
 
 		cl = cent->currentState.constantLight;
-		r = cl & 255;
-		g = ( cl >> 8 ) & 255;
-		b = ( cl >> 16 ) & 255;
-		i = ( ( cl >> 24 ) & 255 ) * 4;
+		r = (float)(( cl >> 0 ) & 255) / 255.0;
+		g = (float)(( cl >> 8 ) & 255) / 255.0;
+		b = (float)(( cl >> 16 ) & 255) / 255.0;
+		i = (float)(( cl >> 24 ) & 255) * 4.0;
 		trap_R_AddLightToScene( cent->lerpOrigin, i, r, g, b );
 	}
 
@@ -140,9 +141,9 @@ static void CG_EntityEffects( centity_t *cent ) {
 CG_General
 ==================
 */
-static void CG_General( centity_t *cent ) {
+static void CG_General( const centity_t *cent ) {
 	refEntity_t			ent;
-	entityState_t		*s1;
+	const entityState_t	*s1;
 
 	s1 = &cent->currentState;
 
@@ -207,11 +208,13 @@ CG_Item
 static void CG_Item( centity_t *cent ) {
 	refEntity_t		ent;
 	entityState_t	*es;
-	gitem_t			*item;
+	const gitem_t	*item;
 	int				msec;
 	float			frac;
 	float			scale;
 	weaponInfo_t	*wi;
+	int				modulus;
+	itemInfo_t		*itemInfo;
 
 	es = &cent->currentState;
 	if ( es->modelindex >= bg_numItems ) {
@@ -219,8 +222,16 @@ static void CG_Item( centity_t *cent ) {
 	}
 
 	// if set to invisible, skip
-	if ( !es->modelindex || ( es->eFlags & EF_NODRAW ) ) {
+	if ( !es->modelindex || ( es->eFlags & EF_NODRAW ) || cent->delaySpawn > cg.time ) {
 		return;
+	}
+
+	itemInfo = &cg_items[ es->modelindex ];
+	if ( !itemInfo->registered ) {
+		CG_RegisterItemVisuals( es->modelindex );
+		if ( !itemInfo->registered ) {
+			return;
+		}
 	}
 
 	item = &bg_itemlist[ es->modelindex ];
@@ -229,7 +240,7 @@ static void CG_Item( centity_t *cent ) {
 		ent.reType = RT_SPRITE;
 		VectorCopy( cent->lerpOrigin, ent.origin );
 		ent.radius = 14;
-		ent.customShader = cg_items[es->modelindex].icon;
+		ent.customShader = cg_items[es->modelindex].icon_df;
 		ent.shaderRGBA[0] = 255;
 		ent.shaderRGBA[1] = 255;
 		ent.shaderRGBA[2] = 255;
@@ -240,7 +251,8 @@ static void CG_Item( centity_t *cent ) {
 
 	// items bob up and down continuously
 	scale = 0.005 + cent->currentState.number * 0.00001;
-	cent->lerpOrigin[2] += 4 + cos( ( cg.time + 1000 ) *  scale ) * 4;
+	modulus = 2 * M_PI * 20228 / scale;
+	cent->lerpOrigin[2] += 4 + cos( ( ( cg.time + 1000 ) % modulus ) *  scale ) * 4;
 
 	memset (&ent, 0, sizeof(ent));
 
@@ -310,6 +322,14 @@ static void CG_Item( centity_t *cent ) {
 #ifdef MISSIONPACK
 		trap_S_AddLoopingSound( cent->currentState.number, cent->lerpOrigin, vec3_origin, cgs.media.weaponHoverSound );
 #endif
+		// pickup color from spectaror/own client
+		if ( item->giTag == WP_RAILGUN ) {
+			const clientInfo_t *ci = cgs.clientinfo + cg.snap->ps.clientNum;
+			ent.shaderRGBA[0] = ci->color1[0] * 255.0f;
+			ent.shaderRGBA[1] = ci->color1[1] * 255.0f;
+			ent.shaderRGBA[2] = ci->color1[2] * 255.0f;
+			ent.shaderRGBA[3] = 255;
+		}
 	}
 
 #ifdef MISSIONPACK
@@ -386,12 +406,13 @@ CG_Missile
 static void CG_Missile( centity_t *cent ) {
 	refEntity_t			ent;
 	entityState_t		*s1;
-	const weaponInfo_t		*weapon;
+	const weaponInfo_t	*weapon;
+	const clientInfo_t	*ci;
 //	int	col;
 
 	s1 = &cent->currentState;
-	if ( s1->weapon > WP_NUM_WEAPONS ) {
-		s1->weapon = 0;
+	if ( s1->weapon >= WP_NUM_WEAPONS ) {
+		s1->weapon = WP_NONE;
 	}
 	weapon = &cg_weapons[s1->weapon];
 
@@ -444,8 +465,7 @@ static void CG_Missile( centity_t *cent ) {
 		ent.reType = RT_SPRITE;
 		ent.radius = 16;
 		ent.rotation = 0;
-		// q3as ent.customShader = cgs.media.plasmaBallShader;
-		// begin q3as
+		//q3as ent.customShader = cgs.media.plasmaBallShader;
 		if ( sta_gTeamColoredPlasma.integer &&  cgs.gametype >= GT_TEAM && cgs.q3as.features.teamColoredPlasma)
 		{
 			if ( s1->generic1 == TEAM_RED )
@@ -486,7 +506,7 @@ static void CG_Missile( centity_t *cent ) {
 
 	// spin as it moves
 	if ( s1->pos.trType != TR_STATIONARY ) {
-		RotateAroundDirection( ent.axis, cg.time / 4 );
+		RotateAroundDirection( ent.axis, ( cg.time % TMOD_004 ) / 4.0 );
 	} else {
 #ifdef MISSIONPACK
 		if ( s1->weapon == WP_PROX_LAUNCHER ) {
@@ -500,7 +520,15 @@ static void CG_Missile( centity_t *cent ) {
 	}
 
 	// add to refresh list, possibly with quad glow
-	CG_AddRefEntityWithPowerups( &ent, s1, TEAM_FREE );
+
+	s1->powerups &= ~( (1 << PW_INVIS) | (1 << PW_REGEN) );
+	ci = &cgs.clientinfo[ s1->clientNum & MAX_CLIENTS ];
+	if ( ci->infoValid ) {
+		CG_AddRefEntityWithPowerups( &ent, s1, ci->team );
+	} else {
+		CG_AddRefEntityWithPowerups( &ent, s1, TEAM_FREE );
+	}
+
 }
 
 /*
@@ -516,8 +544,8 @@ static void CG_Grapple( centity_t *cent ) {
 	const weaponInfo_t		*weapon;
 
 	s1 = &cent->currentState;
-	if ( s1->weapon > WP_NUM_WEAPONS ) {
-		s1->weapon = 0;
+	if ( s1->weapon >= WP_NUM_WEAPONS ) {
+		s1->weapon = WP_NONE;
 	}
 	weapon = &cg_weapons[s1->weapon];
 
@@ -557,9 +585,9 @@ static void CG_Grapple( centity_t *cent ) {
 CG_Mover
 ===============
 */
-static void CG_Mover( centity_t *cent ) {
+static void CG_Mover( const centity_t *cent ) {
 	refEntity_t			ent;
-	entityState_t		*s1;
+	const entityState_t	*s1;
 
 	s1 = &cent->currentState;
 
@@ -587,7 +615,7 @@ static void CG_Mover( centity_t *cent ) {
 	// add the secondary model
 	if ( s1->modelindex2 ) {
 		ent.skinNum = 0;
-		ent.hModel = cgs.gameModels[s1->modelindex2];
+		ent.hModel = cgs.gameModels[ s1->modelindex2 % MAX_MODELS ];
 		trap_R_AddRefEntityToScene(&ent);
 	}
 
@@ -600,9 +628,9 @@ CG_Beam
 Also called as an event
 ===============
 */
-void CG_Beam( centity_t *cent ) {
+void CG_Beam( const centity_t *cent ) {
 	refEntity_t			ent;
-	entityState_t		*s1;
+	const entityState_t	*s1;
 
 	s1 = &cent->currentState;
 
@@ -614,6 +642,7 @@ void CG_Beam( centity_t *cent ) {
 	ent.reType = RT_BEAM;
 
 	ent.renderfx = RF_NOSHADOW;
+	ent.customShader = cgs.media.whiteShader;
 
 	// add to refresh list
 	trap_R_AddRefEntityToScene(&ent);
@@ -625,9 +654,9 @@ void CG_Beam( centity_t *cent ) {
 CG_Portal
 ===============
 */
-static void CG_Portal( centity_t *cent ) {
+static void CG_Portal( const centity_t *cent ) {
 	refEntity_t			ent;
-	entityState_t		*s1;
+	const entityState_t *s1;
 
 	s1 = &cent->currentState;
 
@@ -660,19 +689,21 @@ CG_AdjustPositionForMover
 Also called by client movement prediction code
 =========================
 */
-void CG_AdjustPositionForMover( const vec3_t in, int moverNum, int fromTime, int toTime, vec3_t out ) {
+void CG_AdjustPositionForMover( const vec3_t in, int moverNum, int fromTime, int toTime, vec3_t out, const vec3_t angles_in, vec3_t angles_out ) {
 	centity_t	*cent;
 	vec3_t	oldOrigin, origin, deltaOrigin;
 	vec3_t	oldAngles, angles, deltaAngles;
 
 	if ( moverNum <= 0 || moverNum >= ENTITYNUM_MAX_NORMAL ) {
 		VectorCopy( in, out );
+		VectorCopy( angles_in, angles_out );
 		return;
 	}
 
 	cent = &cg_entities[ moverNum ];
 	if ( cent->currentState.eType != ET_MOVER ) {
 		VectorCopy( in, out );
+		VectorCopy( angles_in, angles_out );
 		return;
 	}
 
@@ -686,7 +717,7 @@ void CG_AdjustPositionForMover( const vec3_t in, int moverNum, int fromTime, int
 	VectorSubtract( angles, oldAngles, deltaAngles );
 
 	VectorAdd( in, deltaOrigin, out );
-
+	VectorAdd( angles_in, deltaAngles, angles_out );
 	// FIXME: origin change when on a rotating object
 }
 
@@ -764,7 +795,7 @@ static void CG_CalcEntityLerpPositions( centity_t *cent ) {
 	// player state
 	if ( cent != &cg.predictedPlayerEntity ) {
 		CG_AdjustPositionForMover( cent->lerpOrigin, cent->currentState.groundEntityNum, 
-		cg.snap->serverTime, cg.time, cent->lerpOrigin );
+		cg.snap->serverTime, cg.time, cent->lerpOrigin, cent->lerpAngles, cent->lerpAngles );
 	}
 }
 
@@ -773,7 +804,7 @@ static void CG_CalcEntityLerpPositions( centity_t *cent ) {
 CG_TeamBase
 ===============
 */
-static void CG_TeamBase( centity_t *cent ) {
+static void CG_TeamBase( const centity_t *cent ) {
 	refEntity_t model;
 #ifdef MISSIONPACK
 	vec3_t angles;
@@ -941,7 +972,7 @@ static void CG_AddCEntity( centity_t *cent ) {
 
 	switch ( cent->currentState.eType ) {
 	default:
-		CG_Error( "Bad entity type: %i\n", cent->currentState.eType );
+		CG_Error( "Bad entity type: %i", cent->currentState.eType );
 		break;
 	case ET_INVISIBLE:
 	case ET_PUSH_TRIGGER:
