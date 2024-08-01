@@ -6,7 +6,7 @@
 
 #include "cg_local.h"
 
-#define	MAX_LOCAL_ENTITIES	512
+#define	MAX_LOCAL_ENTITIES	2048
 localEntity_t	cg_localEntities[MAX_LOCAL_ENTITIES];
 localEntity_t	cg_activeLocalEntities;		// double linked list
 localEntity_t	*cg_freeLocalEntities;		// single linked list
@@ -54,7 +54,7 @@ void CG_FreeLocalEntity( localEntity_t *le ) {
 ===================
 CG_AllocLocalEntity
 
-Will allways succeed, even if it requires freeing an old active entity
+Will always succeed, even if it requires freeing an old active entity
 ===================
 */
 localEntity_t	*CG_AllocLocalEntity( void ) {
@@ -222,7 +222,7 @@ void CG_ReflectVelocity( localEntity_t *le, trace_t *trace ) {
 CG_AddFragment
 ================
 */
-void CG_AddFragment( localEntity_t *le ) {
+static void CG_AddFragment( localEntity_t *le ) {
 	vec3_t	newOrigin;
 	trace_t	trace;
 
@@ -278,7 +278,7 @@ void CG_AddFragment( localEntity_t *le ) {
 	// if it is in a nodrop zone, remove it
 	// this keeps gibs from waiting at the bottom of pits of death
 	// and floating levels
-	if ( trap_CM_PointContents( trace.endpos, 0 ) & CONTENTS_NODROP ) {
+	if ( CG_PointContents( trace.endpos, 0 ) & CONTENTS_NODROP ) {
 		CG_FreeLocalEntity( le );
 		return;
 	}
@@ -309,13 +309,18 @@ These only do simple scaling or modulation before passing to the renderer
 CG_AddFadeRGB
 ====================
 */
-void CG_AddFadeRGB( localEntity_t *le ) {
+static void CG_AddFadeRGB( localEntity_t *le ) {
 	refEntity_t *re;
 	float c;
 
 	re = &le->refEntity;
 
 	c = ( le->endTime - cg.time ) * le->lifeRate;
+
+	if ( re->reType == RT_RAIL_CORE && cg_railTrailRadius.integer && linearLight ) {
+		trap_R_AddLinearLightToScene( re->origin, re->oldorigin, cg_railTrailRadius.value, le->color[0]*c, le->color[1]*c, le->color[2]*c );
+	}
+
 	c *= 0xff;
 
 	re->shaderRGBA[0] = le->color[0] * c;
@@ -323,8 +328,12 @@ void CG_AddFadeRGB( localEntity_t *le ) {
 	re->shaderRGBA[2] = le->color[2] * c;
 	re->shaderRGBA[3] = le->color[3] * c;
 
-	trap_R_AddRefEntityToScene( re );
+	if ( intShaderTime )
+		trap_R_AddRefEntityToScene2( re );
+	else
+		trap_R_AddRefEntityToScene( re );
 }
+
 
 /*
 ==================
@@ -365,7 +374,77 @@ static void CG_AddMoveScaleFade( localEntity_t *le ) {
 		return;
 	}
 
-	trap_R_AddRefEntityToScene( re );
+	if ( intShaderTime )
+		trap_R_AddRefEntityToScene2( re );
+	else
+		trap_R_AddRefEntityToScene( re );
+}
+
+
+/*
+===================
+CG_EmitPolyVerts
+===================
+*/
+static void CG_EmitPolyVerts( const refEntity_t *re )
+{
+	polyVert_t	verts[4];
+	float		sinR, cosR;
+	float		angle;
+	vec3_t		left, up;
+	int			i;
+
+	if ( re->rotation )
+	{
+		angle = M_PI * re->rotation / 180.0;
+		sinR = sin( angle );
+		cosR = cos( angle );
+
+		VectorScale( cg.refdef.viewaxis[1], cosR * re->radius, left );
+		VectorMA( left, -sinR * re->radius, cg.refdef.viewaxis[2], left );
+
+		VectorScale( cg.refdef.viewaxis[2], cosR * re->radius, up );
+		VectorMA( up, sinR * re->radius, cg.refdef.viewaxis[1], up );
+	}
+	else
+	{
+		VectorScale( cg.refdef.viewaxis[1], re->radius, left );
+		VectorScale( cg.refdef.viewaxis[2], re->radius, up );
+	}
+
+	verts[0].xyz[0] = re->origin[0] + left[0] + up[0];
+	verts[0].xyz[1] = re->origin[1] + left[1] + up[1];
+	verts[0].xyz[2] = re->origin[2] + left[2] + up[2];
+	verts[0].st[0] = 0.0;
+	verts[0].st[1] = 0.0;
+
+	verts[1].xyz[0] = re->origin[0] - left[0] + up[0];
+	verts[1].xyz[1] = re->origin[1] - left[1] + up[1];
+	verts[1].xyz[2] = re->origin[2] - left[2] + up[2];
+	verts[1].st[0] = 1.0;
+	verts[1].st[1] = 0.0;
+
+	verts[2].xyz[0] = re->origin[0] - left[0] - up[0];
+	verts[2].xyz[1] = re->origin[1] - left[1] - up[1];
+	verts[2].xyz[2] = re->origin[2] - left[2] - up[2];
+	verts[2].st[0] = 1.0;
+	verts[2].st[1] = 1.0;
+
+	verts[3].xyz[0] = re->origin[0] + left[0] - up[0];
+	verts[3].xyz[1] = re->origin[1] + left[1] - up[1];
+	verts[3].xyz[2] = re->origin[2] + left[2] - up[2];
+	verts[3].st[0] = 0.0;
+	verts[3].st[1] = 1.0;
+
+	for ( i = 0; i < 4; i++ )
+	{
+		verts[i].modulate[0] = re->shaderRGBA[0];
+		verts[i].modulate[1] = re->shaderRGBA[1];
+		verts[i].modulate[2] = re->shaderRGBA[2];
+		verts[i].modulate[3] = re->shaderRGBA[3];
+	}
+
+	trap_R_AddPolyToScene( re->customShader, 4, verts );
 }
 
 
@@ -395,13 +474,16 @@ static void CG_AddScaleFade( localEntity_t *le ) {
 	// if the view would be "inside" the sprite, kill the sprite
 	// so it doesn't add too much overdraw
 	VectorSubtract( re->origin, cg.refdef.vieworg, delta );
-	len = VectorLength( delta );
-	if ( len < le->radius ) {
+	len = VectorLengthSquared( delta );
+	if ( len < le->radius * le->radius ) {
 		CG_FreeLocalEntity( le );
 		return;
 	}
-
+#if 1
+	CG_EmitPolyVerts( re );
+#else
 	trap_R_AddRefEntityToScene( re );
+#endif
 }
 
 
@@ -435,15 +517,17 @@ static void CG_AddFallScaleFade( localEntity_t *le ) {
 	// if the view would be "inside" the sprite, kill the sprite
 	// so it doesn't add too much overdraw
 	VectorSubtract( re->origin, cg.refdef.vieworg, delta );
-	len = VectorLength( delta );
-	if ( len < le->radius ) {
+	len = VectorLengthSquared( delta );
+	if ( len < le->radius * le->radius ) {
 		CG_FreeLocalEntity( le );
 		return;
 	}
-
+#if 1
+	CG_EmitPolyVerts( re );
+#else
 	trap_R_AddRefEntityToScene( re );
+#endif
 }
-
 
 
 /*
@@ -457,7 +541,10 @@ static void CG_AddExplosion( localEntity_t *ex ) {
 	ent = &ex->refEntity;
 
 	// add the entity
-	trap_R_AddRefEntityToScene(ent);
+	if ( intShaderTime )
+		trap_R_AddRefEntityToScene2( ent );
+	else
+		trap_R_AddRefEntityToScene( ent );
 
 	// add the dlight
 	if ( ex->light ) {
@@ -473,6 +560,7 @@ static void CG_AddExplosion( localEntity_t *ex ) {
 		trap_R_AddLightToScene(ent->origin, light, ex->lightColor[0], ex->lightColor[1], ex->lightColor[2] );
 	}
 }
+
 
 /*
 ================
@@ -498,7 +586,10 @@ static void CG_AddSpriteExplosion( localEntity_t *le ) {
 	re.reType = RT_SPRITE;
 	re.radius = 42 * ( 1.0 - c ) + 30;
 
-	trap_R_AddRefEntityToScene( &re );
+	if ( intShaderTime )
+		trap_R_AddRefEntityToScene2( &re );
+	else
+		trap_R_AddRefEntityToScene( &re );
 
 	// add the dlight
 	if ( le->light ) {
@@ -676,21 +767,23 @@ void CG_AddInvulnerabilityJuiced( localEntity_t *le ) {
 		trap_R_AddRefEntityToScene( &le->refEntity );
 	}
 }
+#endif
+
 
 /*
 ===================
 CG_AddRefEntity
 ===================
 */
-void CG_AddRefEntity( localEntity_t *le ) {
-	if (le->endTime < cg.time) {
+static void CG_AddRefEntity( localEntity_t *le ) {
+	if ( le->endTime < cg.time ) {
 		CG_FreeLocalEntity( le );
 		return;
 	}
 	trap_R_AddRefEntityToScene( &le->refEntity );
 }
 
-#endif
+
 /*
 ===================
 CG_AddScorePlum
@@ -729,27 +822,27 @@ void CG_AddScorePlum( localEntity_t *le ) {
 		}
 
 	}
-	if (c < 0.25)
-		re->shaderRGBA[3] = 0xff * 4 * c;
+	if (c < 0.25f)
+		re->shaderRGBA[3] = 0xff * 4.0f * c;
 	else
 		re->shaderRGBA[3] = 0xff;
 
 	re->radius = NUMBER_SIZE / 2;
 
 	VectorCopy(le->pos.trBase, origin);
-	origin[2] += 110 - c * 100;
+	origin[2] += 110.0f - c * 100.0f;
 
 	VectorSubtract(cg.refdef.vieworg, origin, dir);
 	CrossProduct(dir, up, vec);
 	VectorNormalize(vec);
 
-	VectorMA(origin, -10 + 20 * sin(c * 2 * M_PI), vec, origin);
+	VectorMA(origin, -10.0f + 20 * sin(c * 2 * M_PI), vec, origin);
 
 	// if the view would be "inside" the sprite, kill the sprite
 	// so it doesn't add too much overdraw
 	VectorSubtract( origin, cg.refdef.vieworg, delta );
-	len = VectorLength( delta );
-	if ( len < 20 ) {
+	len = VectorLengthSquared( delta );
+	if ( len < 20*20 ) {
 		CG_FreeLocalEntity( le );
 		return;
 	}
@@ -823,19 +916,19 @@ void CG_AddLocalEntities( void ) {
 			CG_AddFragment( le );
 			break;
 
-		case LE_MOVE_SCALE_FADE:		// water bubbles
+		case LE_MOVE_SCALE_FADE:	// water bubbles, plasma trails, smoke puff
 			CG_AddMoveScaleFade( le );
 			break;
 
-		case LE_FADE_RGB:				// teleporters, railtrails
+		case LE_FADE_RGB:			// teleporters, railtrails
 			CG_AddFadeRGB( le );
 			break;
 
-		case LE_FALL_SCALE_FADE: // gib blood trails
+		case LE_FALL_SCALE_FADE:	// gib blood trails
 			CG_AddFallScaleFade( le );
 			break;
 
-		case LE_SCALE_FADE:		// rocket trails
+		case LE_SCALE_FADE:			// rocket trails
 			CG_AddScaleFade( le );
 			break;
 
@@ -853,14 +946,10 @@ void CG_AddLocalEntities( void ) {
 		case LE_INVULJUICED:
 			CG_AddInvulnerabilityJuiced( le );
 			break;
+#endif
 		case LE_SHOWREFENTITY:
 			CG_AddRefEntity( le );
 			break;
-#endif
 		}
 	}
 }
-
-
-
-
