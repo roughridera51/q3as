@@ -4,7 +4,6 @@
 #endif
 
 #include "cg_local.h"
-#include "cg_q3as.h"
 #include "../ui/ui_shared.h"
 
 extern displayContextDef_t cgDC;
@@ -99,8 +98,7 @@ void CG_CheckOrderPending() {
 	}
 }
 
-// q3as static void CG_SetSelectedPlayerName() {
-void CG_SetSelectedPlayerName() {					// q3as
+static void CG_SetSelectedPlayerName() {
   if (cg_currentSelectedPlayer.integer >= 0 && cg_currentSelectedPlayer.integer < numSortedTeamPlayers) {
 		clientInfo_t *ci = cgs.clientinfo + sortedTeamPlayers[cg_currentSelectedPlayer.integer];
 	  if (ci) {
@@ -112,14 +110,14 @@ void CG_SetSelectedPlayerName() {					// q3as
 		trap_Cvar_Set("cg_selectedPlayerName", "Everyone");
 	}
 }
-int CG_GetSelectedPlayer() {
+int CG_GetSelectedPlayer( void ) {
 	if (cg_currentSelectedPlayer.integer < 0 || cg_currentSelectedPlayer.integer >= numSortedTeamPlayers) {
 		cg_currentSelectedPlayer.integer = 0;
 	}
 	return cg_currentSelectedPlayer.integer;
 }
 
-void CG_SelectNextPlayer() {
+void CG_SelectNextPlayer( void ) {
 	CG_CheckOrderPending();
 	if (cg_currentSelectedPlayer.integer >= 0 && cg_currentSelectedPlayer.integer < numSortedTeamPlayers) {
 		cg_currentSelectedPlayer.integer++;
@@ -129,7 +127,7 @@ void CG_SelectNextPlayer() {
 	CG_SetSelectedPlayerName();
 }
 
-void CG_SelectPrevPlayer() {
+void CG_SelectPrevPlayer( void ) {
 	CG_CheckOrderPending();
 	if (cg_currentSelectedPlayer.integer > 0 && cg_currentSelectedPlayer.integer < numSortedTeamPlayers) {
 		cg_currentSelectedPlayer.integer--;
@@ -515,8 +513,7 @@ static void CG_DrawSelectedPlayerPowerup( rectDef_t *rect, qboolean draw2D ) {
 }
 
 
-// q3as static void CG_DrawSelectedPlayerHead( rectDef_t *rect, qboolean draw2D, qboolean voice ) {
-void CG_DrawSelectedPlayerHead( rectDef_t *rect, qboolean draw2D, qboolean voice ) {		// q3as
+static void CG_DrawSelectedPlayerHead( rectDef_t *rect, qboolean draw2D, qboolean voice ) {
 	clipHandle_t	cm;
 	clientInfo_t	*ci;
 	float			len;
@@ -1216,25 +1213,13 @@ static void CG_Text_Paint_Limit(float *maxX, float x, float y, float scale, vec4
 		count = 0;
 		while (s && *s && count < len) {
 			glyph = &font->glyphs[(int)*s]; // TTimo: FIXME: getting nasty warnings without the cast, hopefully this doesn't break the VM build
-						if ( Q_IsColorString( s ) ) {
-				 // TA EUI - check for HTML colors
-				if ( *( s + 1 ) == 'X' )
-				{
-					as_parseHTMLColors( newColor, &*(s + 2) );
-					s += 8;
-				}
-				else
-				{
-					memcpy( newColor, g_color_table[ColorIndex(*(s+1))], sizeof( newColor ) );
-					s += 2;
-				}
-				//memcpy( newColor, g_color_table[ColorIndex(*(s+1))], sizeof( newColor ) );
-				// end TA EUI
+			if ( Q_IsColorString( s ) ) {
+				memcpy( newColor, g_color_table[ColorIndex(*(s+1))], sizeof( newColor ) );
 				newColor[3] = color[3];
 				trap_R_SetColor( newColor );
+				s += 2;
 				continue;
 			} else {
-
 	      float yadj = useScale * glyph->top;
 				if (CG_Text_Width(s, useScale, 1) + x > max) {
 					*maxX = 0;
@@ -1506,10 +1491,6 @@ void CG_DrawMedal(int ownerDraw, rectDef_t *rect, float scale, vec4_t color, qha
 
 }
 
-// begin q3as
-extern void as_drawSelectedPlayerNameLocation( rectDef_t *rect, float scale, vec4_t color, int textStyle );
-extern void as_drawSelectedPlayerNumber( rectDef_t *rect, float scale, vec4_t color, int textStyle, qboolean draw2D );
-// end q3as
 	
 //
 void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y, int ownerDraw, int ownerDrawFlags, int align, float special, float scale, vec4_t color, qhandle_t shader, int textStyle) {
@@ -1571,14 +1552,6 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
   case CG_SELECTEDPLAYER_LOCATION:
     CG_DrawSelectedPlayerLocation(&rect, scale, color, textStyle);
     break;
-  // begin q3as
-  case CG_SELECTEDPLAYER_NUMBER:
-    as_drawSelectedPlayerNumber(&rect, scale, color, textStyle, ownerDrawFlags & CG_SHOW_2DONLY );
-	break;
-  case CG_SELECTEDPLAYER_NAMELOCATION:
-	as_drawSelectedPlayerNameLocation(&rect, scale, color, textStyle);
-	break;
-  // end q3as
   case CG_SELECTEDPLAYER_WEAPON:
     CG_DrawSelectedPlayerWeapon(&rect);
     break;
@@ -1855,4 +1828,3 @@ void CG_GetTeamColor(vec4_t *color) {
     (*color)[3] = 0.25f;
 	}
 }
-
