@@ -120,7 +120,7 @@ void CG_ImpactMark( qhandle_t markShader, const vec3_t origin, const vec3_t dir,
 	vec3_t			markPoints[MAX_MARK_POINTS];
 	vec3_t			projection;
 
-	if ( !cg_addMarks.integer ) {
+	if ( !cg_addMarks.integer && !temporary ) {
 		return;
 	}
 
@@ -282,8 +282,8 @@ typedef struct particle_s
 {
 	struct particle_s	*next;
 
-	float		time;
-	float		endtime;
+	int			time;
+	int			endtime;
 
 	vec3_t		org;
 	vec3_t		vel;
@@ -304,7 +304,7 @@ typedef struct particle_s
 	float		start;
 	float		end;
 
-	float		startfade;
+	int			startfade;
 	qboolean	rotate;
 	int			snum;
 	
@@ -360,13 +360,13 @@ static int	numShaderAnims;
 
 cparticle_t	*active_particles, *free_particles;
 cparticle_t	particles[MAX_PARTICLES];
-int		cl_numparticles = MAX_PARTICLES;
+const int	cl_numparticles = MAX_PARTICLES;
 
-qboolean		initparticles = qfalse;
-vec3_t			pvforward, pvright, pvup;
-vec3_t			rforward, rright, rup;
+qboolean	initparticles = qfalse;
+vec3_t		pvforward, pvright, pvup;
+vec3_t		rforward, rright, rup;
 
-float			oldtime;
+int			oldtime;
 
 /*
 ===============
@@ -1068,9 +1068,9 @@ void CG_AddParticles (void)
 	float			alpha;
 	float			time, time2;
 	vec3_t			org;
-	int				color;
+	//int				color;
 	cparticle_t		*active, *tail;
-	int				type;
+	//int				type;
 	vec3_t			rotate_ang;
 
 	if (!initparticles)
@@ -1175,7 +1175,7 @@ void CG_AddParticles (void)
 		if (alpha > 1.0)
 			alpha = 1;
 
-		color = p->color;
+		//color = p->color;
 
 		time2 = time*time;
 
@@ -1183,7 +1183,7 @@ void CG_AddParticles (void)
 		org[1] = p->org[1] + p->vel[1]*time + p->accel[1]*time2;
 		org[2] = p->org[2] + p->vel[2]*time + p->accel[2]*time2;
 
-		type = p->type;
+		//type = p->type;
 
 		CG_AddParticleToScene (p, org, alpha);
 	}
@@ -1199,7 +1199,7 @@ CG_AddParticles
 void CG_ParticleSnowFlurry (qhandle_t pshader, centity_t *cent)
 {
 	cparticle_t	*p;
-	qboolean turb = qtrue;
+	//qboolean turb = qtrue;
 
 	if (!pshader)
 		CG_Printf ("CG_ParticleSnowFlurry pshader == ZERO!\n");
@@ -1239,14 +1239,14 @@ void CG_ParticleSnowFlurry (qhandle_t pshader, centity_t *cent)
 
 	p->type = P_WEATHER_FLURRY;
 	
-	if (turb)
+	//if (turb)
 		p->vel[2] = -10;
 	
 	VectorCopy(cent->currentState.origin, p->org);
 
-	p->org[0] = p->org[0];
-	p->org[1] = p->org[1];
-	p->org[2] = p->org[2];
+	//p->org[0] = p->org[0];
+	//p->org[1] = p->org[1];
+	//p->org[2] = p->org[2];
 
 	p->vel[0] = p->vel[1] = 0;
 	
@@ -1256,7 +1256,7 @@ void CG_ParticleSnowFlurry (qhandle_t pshader, centity_t *cent)
 	p->vel[1] += cent->currentState.angles[1] * 32 + (crandom() * 16);
 	p->vel[2] += cent->currentState.angles[2];
 
-	if (turb)
+	//if (turb)
 	{
 		p->accel[0] = crandom () * 16;
 		p->accel[1] = crandom () * 16;
@@ -1477,7 +1477,7 @@ CG_ParticleExplosion
 ======================
 */
 
-void CG_ParticleExplosion (char *animStr, vec3_t origin, vec3_t vel, int duration, int sizeStart, int sizeEnd)
+void CG_ParticleExplosion( const char *animStr, const vec3_t origin, const vec3_t vel, int duration, int sizeStart, int sizeEnd )
 {
 	cparticle_t	*p;
 	int anim;
@@ -2063,8 +2063,6 @@ void CG_ParticleBloodCloud (centity_t *cent, vec3_t origin, vec3_t dir)
 		p->alpha = 0.75;
 		
 	}
-
-	
 }
 
 void CG_ParticleSparks (vec3_t org, vec3_t vel, int duration, float x, float y, float speed)
@@ -2251,4 +2249,3 @@ void CG_ParticleMisc (qhandle_t pshader, vec3_t origin, int size, int duration, 
 
 	p->rotate = qfalse;
 }
-
