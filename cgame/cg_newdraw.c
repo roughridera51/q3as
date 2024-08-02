@@ -4,6 +4,7 @@
 #endif
 
 #include "cg_local.h"
+#include "cg_q3as.h"					
 #include "../ui/ui_shared.h"
 
 extern displayContextDef_t cgDC;
@@ -137,7 +138,6 @@ void CG_SelectPrevPlayer( void ) {
 	CG_SetSelectedPlayerName();
 }
 
-
 static void CG_DrawPlayerArmorIcon( rectDef_t *rect, qboolean draw2D ) {
 	centity_t	*cent;
 	playerState_t	*ps;
@@ -250,8 +250,6 @@ static void CG_DrawPlayerAmmoValue(rectDef_t *rect, float scale, vec4_t color, q
 	}
 
 }
-
-
 
 static void CG_DrawPlayerHead(rectDef_t *rect, qboolean draw2D) {
 	vec3_t		angles;
@@ -391,7 +389,6 @@ static void CG_DrawSelectedPlayerStatus( rectDef_t *rect ) {
 	}
 }
 
-
 static void CG_DrawPlayerStatus( rectDef_t *rect ) {
 	clientInfo_t *ci = &cgs.clientinfo[cg.snap->ps.clientNum];
 	if (ci) {
@@ -399,7 +396,6 @@ static void CG_DrawPlayerStatus( rectDef_t *rect ) {
 		CG_DrawPic( rect->x, rect->y, rect->w, rect->h, h);
 	}
 }
-
 
 static void CG_DrawSelectedPlayerName( rectDef_t *rect, float scale, vec4_t color, qboolean voice, int textStyle) {
 	clientInfo_t *ci;
@@ -431,8 +427,6 @@ static void CG_DrawPlayerLocation( rectDef_t *rect, float scale, vec4_t color, i
     CG_Text_Paint(rect->x, rect->y + rect->h, scale, color, p, 0, 0, textStyle);
   }
 }
-
-
 
 static void CG_DrawSelectedPlayerWeapon( rectDef_t *rect ) {
 	clientInfo_t *ci;
@@ -485,7 +479,6 @@ static void CG_DrawPlayerItem( rectDef_t *rect, float scale, qboolean draw2D) {
 
 }
 
-
 static void CG_DrawSelectedPlayerPowerup( rectDef_t *rect, qboolean draw2D ) {
 	clientInfo_t *ci;
   int j;
@@ -511,7 +504,6 @@ static void CG_DrawSelectedPlayerPowerup( rectDef_t *rect, qboolean draw2D ) {
 
   }
 }
-
 
 static void CG_DrawSelectedPlayerHead( rectDef_t *rect, qboolean draw2D, qboolean voice ) {
 	clipHandle_t	cm;
@@ -561,7 +553,6 @@ static void CG_DrawSelectedPlayerHead( rectDef_t *rect, qboolean draw2D, qboolea
 
 }
 
-
 static void CG_DrawPlayerHealth(rectDef_t *rect, float scale, vec4_t color, qhandle_t shader, int textStyle ) {
 	playerState_t	*ps;
   int value;
@@ -581,7 +572,6 @@ static void CG_DrawPlayerHealth(rectDef_t *rect, float scale, vec4_t color, qhan
 	  CG_Text_Paint(rect->x + (rect->w - value) / 2, rect->y + rect->h, scale, color, num, 0, 0, textStyle);
 	}
 }
-
 
 static void CG_DrawRedScore(rectDef_t *rect, float scale, vec4_t color, qhandle_t shader, int textStyle ) {
 	int value;
@@ -609,7 +599,6 @@ static void CG_DrawBlueScore(rectDef_t *rect, float scale, vec4_t color, qhandle
 	value = CG_Text_Width(num, scale, 0);
 	CG_Text_Paint(rect->x + rect->w - value, rect->y + rect->h, scale, color, num, 0, 0, textStyle);
 }
-
 // FIXME: team name support
 static void CG_DrawRedName(rectDef_t *rect, float scale, vec4_t color, int textStyle ) {
   CG_Text_Paint(rect->x, rect->y + rect->h, scale, color, cg_redTeamName.string , 0, 0, textStyle);
@@ -786,7 +775,6 @@ static void CG_OneFlagStatus(rectDef_t *rect) {
 	}
 }
 
-
 static void CG_DrawCTFPowerUp(rectDef_t *rect) {
 	int		value;
 
@@ -799,8 +787,6 @@ static void CG_DrawCTFPowerUp(rectDef_t *rect) {
 		CG_DrawPic( rect->x, rect->y, rect->w, rect->h, cg_items[ value ].icon );
 	}
 }
-
-
 
 static void CG_DrawTeamColor(rectDef_t *rect, vec4_t color) {
 	CG_DrawTeamBackground(rect->x, rect->y, rect->w, rect->h, color[3], cg.snap->ps.persistant[PERS_TEAM]);
@@ -978,7 +964,6 @@ qboolean CG_YourTeamHasFlag() {
 	}
 	return qfalse;
 }
-
 // THINKABOUTME: should these be exclusive or inclusive.. 
 // 
 qboolean CG_OwnerDrawVisible(int flags) {
@@ -1085,8 +1070,6 @@ qboolean CG_OwnerDrawVisible(int flags) {
 	return qfalse;
 }
 
-
-
 static void CG_DrawPlayerHasFlag(rectDef_t *rect, qboolean force2D) {
 	int adj = (force2D) ? 0 : 2;
 	if( cg.predictedPlayerState.powerups[PW_REDFLAG] ) {
@@ -1118,7 +1101,6 @@ const char *CG_GetKillerText() {
 	return s;
 }
 
-
 static void CG_DrawKiller(rectDef_t *rect, float scale, vec4_t color, qhandle_t shader, int textStyle ) {
 	// fragged by ... line
 	if ( cg.killerName[0] ) {
@@ -1127,7 +1109,6 @@ static void CG_DrawKiller(rectDef_t *rect, float scale, vec4_t color, qhandle_t 
 	}
 	
 }
-
 
 static void CG_DrawCapFragLimit(rectDef_t *rect, float scale, vec4_t color, qhandle_t shader, int textStyle) {
 	int limit = (cgs.gametype >= GT_CTF) ? cgs.capturelimit : cgs.fraglimit;
@@ -1184,6 +1165,7 @@ const char *CG_GameTypeString() {
 	}
 	return "";
 }
+
 static void CG_DrawGameType(rectDef_t *rect, float scale, vec4_t color, qhandle_t shader, int textStyle ) {
 	CG_Text_Paint(rect->x, rect->y + rect->h, scale, color, CG_GameTypeString(), 0, 0, textStyle);
 }
@@ -1244,8 +1226,6 @@ static void CG_Text_Paint_Limit(float *maxX, float x, float y, float scale, vec4
   }
 
 }
-
-
 
 #define PIC_WIDTH 12
 
@@ -1367,7 +1347,6 @@ void CG_DrawNewTeamInfo(rectDef_t *rect, float text_x, float text_y, float scale
 	}
 }
 
-
 void CG_DrawTeamSpectators(rectDef_t *rect, float scale, vec4_t color, qhandle_t shader) {
 	if (cg.spectatorLen) {
 		float maxX;
@@ -1424,8 +1403,6 @@ void CG_DrawTeamSpectators(rectDef_t *rect, float scale, vec4_t color, qhandle_t
 
 	}
 }
-
-
 
 void CG_DrawMedal(int ownerDraw, rectDef_t *rect, float scale, vec4_t color, qhandle_t shader) {
 	score_t *score = &cg.scores[cg.selectedScore];
@@ -1490,8 +1467,10 @@ void CG_DrawMedal(int ownerDraw, rectDef_t *rect, float scale, vec4_t color, qha
 	trap_R_SetColor(NULL);
 
 }
-
-	
+// begin q3as
+extern void as_drawSelectedPlayerNameLocation( rectDef_t *rect, float scale, vec4_t color, int textStyle );
+extern void as_drawSelectedPlayerNumber( rectDef_t *rect, float scale, vec4_t color, int textStyle, qboolean draw2D );
+// end q3as			 
 //
 void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y, int ownerDraw, int ownerDrawFlags, int align, float special, float scale, vec4_t color, qhandle_t shader, int textStyle) {
 	rectDef_t rect;
@@ -1552,6 +1531,14 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
   case CG_SELECTEDPLAYER_LOCATION:
     CG_DrawSelectedPlayerLocation(&rect, scale, color, textStyle);
     break;
+// begin q3as
+  case CG_SELECTEDPLAYER_NUMBER:
+    as_drawSelectedPlayerNumber(&rect, scale, color, textStyle, ownerDrawFlags & CG_SHOW_2DONLY );
+	break;
+  case CG_SELECTEDPLAYER_NAMELOCATION:
+	as_drawSelectedPlayerNameLocation(&rect, scale, color, textStyle);
+	break;
+  // end q3as			   
   case CG_SELECTEDPLAYER_WEAPON:
     CG_DrawSelectedPlayerWeapon(&rect);
     break;
@@ -1737,9 +1724,6 @@ void CG_ShowTeamMenu() {
   Menus_OpenByName("teamMenu");
 }
 
-
-
-
 /*
 ==================
 CG_EventHandling
@@ -1759,8 +1743,6 @@ void CG_EventHandling(int type) {
   }
 
 }
-
-
 
 void CG_KeyEvent(int key, qboolean down) {
 
@@ -1812,7 +1794,6 @@ void CG_ShowResponseHead() {
 void CG_RunMenuScript(char **args) {
 }
 
-
 void CG_GetTeamColor(vec4_t *color) {
   if (cg.snap->ps.persistant[PERS_TEAM] == TEAM_RED) {
     (*color)[0] = 1.0f;
@@ -1828,3 +1809,4 @@ void CG_GetTeamColor(vec4_t *color) {
     (*color)[3] = 0.25f;
 	}
 }
+
