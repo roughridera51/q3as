@@ -122,6 +122,7 @@ static void CG_TransitionSnapshot( void ) {
 
 	// if we had a map_restart, set everthing with initial
 	if ( !cg.snap ) {
+		return;
 	}
 
 	// clear the currentValid flag for all entities in the existing snapshot
@@ -161,11 +162,10 @@ static void CG_TransitionSnapshot( void ) {
 		// if we are not doing client side movement prediction for any
 		// reason, then the client events and view changes will be issued now
 		if ( cg.demoPlayback || (cg.snap->ps.pm_flags & PMF_FOLLOW)
-			|| cg_nopredict.integer || cg_synchronousClients.integer ) {
+			|| cg_nopredict.integer || cgs.synchronousClients ) {
 			CG_TransitionPlayerState( ps, ops );
 		}
 	}
-
 }
 
 
@@ -178,6 +178,7 @@ A new snapshot has just been read in from the client system.
 */
 static void CG_SetNextSnap( snapshot_t *snap ) {
 	int					num;
+	int					esNum;
 	entityState_t		*es;
 	centity_t			*cent;
 
@@ -193,6 +194,12 @@ static void CG_SetNextSnap( snapshot_t *snap ) {
 
 		memcpy(&cent->nextState, es, sizeof(entityState_t));
 		//cent->nextState = *es;
+
+		if ( cgs.ospEnc && ( esNum = cent->nextState.number ) <= MAX_CLIENTS-1 ) {
+			cent->nextState.pos.trBase[0] += (677 - 7 * esNum);
+			cent->nextState.pos.trBase[1] += (411 - 12 * esNum);
+			cent->nextState.pos.trBase[2] += (243 - 2 * esNum);
+		}
 
 		// if this frame is a teleport, or the entity wasn't in the
 		// previous frame, don't interpolate
@@ -241,7 +248,7 @@ static snapshot_t *CG_ReadNextSnapshot( void ) {
 	snapshot_t	*dest;
 
 	if ( cg.latestSnapshotNum > cgs.processedSnapshotNum + 1000 ) {
-		CG_Printf( "WARNING: CG_ReadNextSnapshot: way out of range, %i > %i", 
+		CG_Printf( "WARNING: CG_ReadNextSnapshot: way out of range, %i > %i\n", 
 			cg.latestSnapshotNum, cgs.processedSnapshotNum );
 	}
 
@@ -274,7 +281,9 @@ static snapshot_t *CG_ReadNextSnapshot( void ) {
 		// buffer in the client system.
 
 		// record as a dropped packet
-		CG_AddLagometerSnapshotInfo( NULL );
+		if ( cg.snap ) {
+			CG_AddLagometerSnapshotInfo( NULL );
+		}
 
 		// If there are additional snapshots, continue trying to
 		// read them.
@@ -351,7 +360,6 @@ void CG_ProcessSnapshots( void ) {
 
 			CG_SetNextSnap( snap );
 
-
 			// if time went backwards, we have a level restart
 			if ( cg.nextSnap->serverTime < cg.snap->serverTime ) {
 				CG_Error( "CG_ProcessSnapshots: Server time went backwards" );
@@ -378,6 +386,6 @@ void CG_ProcessSnapshots( void ) {
 	if ( cg.nextSnap != NULL && cg.nextSnap->serverTime <= cg.time ) {
 		CG_Error( "CG_ProcessSnapshots: cg.nextSnap->serverTime <= cg.time" );
 	}
-
 }
+
 
