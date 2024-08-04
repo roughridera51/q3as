@@ -65,8 +65,9 @@ void CG_TestModel_f (void) {
 		cg.testModelEntity.frame = 1;
 		cg.testModelEntity.oldframe = 0;
 	}
-	if (! cg.testModelEntity.hModel ) {
-		CG_Printf( "Can't register model\n" );
+
+	if ( !cg.testModelEntity.hModel ) {
+		CG_Printf( "Can't register model '%s'.\n", cg.testModelName );
 		return;
 	}
 
@@ -130,7 +131,7 @@ static void CG_AddTestModel (void) {
 		return;
 	}
 
-	// if testing a gun, set the origin reletive to the view origin
+	// if testing a gun, set the origin relative to the view origin
 	if ( cg.testGun ) {
 		VectorCopy( cg.refdef.vieworg, cg.testModelEntity.origin );
 		VectorCopy( cg.refdef.viewaxis[0], cg.testModelEntity.axis[0] );
@@ -250,7 +251,7 @@ static void CG_OffsetThirdPersonView( void ) {
 			VectorCopy( trace.endpos, view );
 			view[2] += (1.0 - trace.fraction) * 32;
 			// try another trace to this position, because a tunnel may have the ceiling
-			// close enogh that this is poking out
+			// close enough that this is poking out
 
 			CG_Trace( &trace, cg.refdef.vieworg, mins, maxs, view, cg.predictedPlayerState.clientNum, MASK_SOLID );
 			VectorCopy( trace.endpos, view );
@@ -452,7 +453,7 @@ Fixed fov at intermissions, otherwise account for fov variable and zooms.
 
 static int CG_CalcFov( void ) {
 	float	x;
-	float	phase;
+	//float	phase;
 	float	v;
 	int		contents;
 	float	fov_x, fov_y;
@@ -460,30 +461,27 @@ static int CG_CalcFov( void ) {
 	float	f;
 	int		inwater;
 
+	cgs.fov = cg_fov.value;
+	if ( cgs.fov < 1.0 )
+		cgs.fov = 1.0;
+	else if ( cgs.fov > 160.0 )
+		cgs.fov = 160.0;
+
+	cgs.zoomFov = cg_zoomFov.value;
+	if ( cgs.zoomFov < 1.0 )
+		cgs.zoomFov = 1.0;
+	else if ( cgs.zoomFov > 160.0 )
+		cgs.zoomFov = 160.0;
+
 	if ( cg.predictedPlayerState.pm_type == PM_INTERMISSION ) {
 		// if in intermission, use a fixed value
 		fov_x = 90;
 	} else {
 		// user selectable
-		if ( cgs.dmflags & DF_FIXED_FOV ) {
-			// dmflag to prevent wide fov for all clients
-			fov_x = 90;
-		} else {
-			fov_x = cg_fov.value;
-			if ( fov_x < 1 ) {
-				fov_x = 1;
-			} else if ( fov_x > 160 ) {
-				fov_x = 160;
-			}
-		}
+		fov_x = cgs.fov;
 
 		// account for zooms
-		zoomFov = cg_zoomFov.value;
-		if ( zoomFov < 1 ) {
-			zoomFov = 1;
-		} else if ( zoomFov > 160 ) {
-			zoomFov = 160;
-		}
+		zoomFov = cgs.zoomFov;
 
 		if ( cg.zoomed ) {
 			f = ( cg.time - cg.zoomTime ) / (float)ZOOM_TIME;
@@ -495,11 +493,21 @@ static int CG_CalcFov( void ) {
 		} else {
 			f = ( cg.time - cg.zoomTime ) / (float)ZOOM_TIME;
 			if ( f > 1.0 ) {
-				fov_x = fov_x;
+				//fov_x = fov_x;
 			} else {
 				fov_x = zoomFov + f * ( fov_x - zoomFov );
 			}
 		}
+	}
+
+	if ( cg_fovAdjust.integer ) {
+		// Based on LordHavoc's code for Darkplaces
+		// http://www.quakeworld.nu/forum/topic/53/what-does-your-qw-look-like/page/30
+		const float baseAspect = 0.75f; // 3/4
+		const float aspect = (float)cg.refdef.width/(float)cg.refdef.height;
+		const float desiredFov = fov_x;
+
+		fov_x = atan2( tan( desiredFov * M_PI / 360.0f ) * baseAspect * aspect, 1 ) * 360.0f / M_PI;
 	}
 
 	x = cg.refdef.width / tan( fov_x / 360 * M_PI );
@@ -509,8 +517,9 @@ static int CG_CalcFov( void ) {
 	// warp if underwater
 	contents = CG_PointContents( cg.refdef.vieworg, -1 );
 	if ( contents & ( CONTENTS_WATER | CONTENTS_SLIME | CONTENTS_LAVA ) ){
-		phase = cg.time / 1000.0 * WAVE_FREQUENCY * M_PI * 2;
-		v = WAVE_AMPLITUDE * sin( phase );
+		//phase = cg.time / 1000.0 * WAVE_FREQUENCY * M_PI * 2;
+		//v = WAVE_AMPLITUDE * sin( phase );
+		v = WAVE_AMPLITUDE * sin( (cg.time % 16419587) / 397.87735f ); // result is very close to original
 		fov_x += v;
 		fov_y -= v;
 		inwater = qtrue;
@@ -545,6 +554,10 @@ static void CG_DamageBlendBlob( void ) {
 	int			t;
 	int			maxTime;
 	refEntity_t		ent;
+
+	if (!cg_blood.integer) {
+		return;
+	}
 
 	if ( !cg.damageValue ) {
 		return;
@@ -663,7 +676,7 @@ static int CG_CalcViewValues( void ) {
 		CG_OffsetFirstPersonView();
 	}
 
-	// position eye reletive to origin
+	// position eye relative to origin
 	AnglesToAxis( cg.refdefViewAngles, cg.refdef.viewaxis );
 
 	if ( cg.hyperspace ) {
@@ -707,10 +720,20 @@ CG_AddBufferedSound
 void CG_AddBufferedSound( sfxHandle_t sfx ) {
 	if ( !sfx )
 		return;
+
+	// clear all buffered sounds
+	if ( sfx == -1 ) {
+		cg.soundBufferIn = 0;
+		cg.soundBufferOut = 0;
+		memset( cg.soundBuffer, 0, sizeof( cg.soundBuffer ) );
+		return;
+	}
+
 	cg.soundBuffer[cg.soundBufferIn] = sfx;
 	cg.soundBufferIn = (cg.soundBufferIn + 1) % MAX_SOUNDBUFFER;
 	if (cg.soundBufferIn == cg.soundBufferOut) {
-		cg.soundBufferOut++;
+		//cg.soundBufferOut++;
+		cg.soundBufferOut = (cg.soundBufferOut + 1) % MAX_SOUNDBUFFER;
 	}
 }
 
@@ -722,16 +745,42 @@ CG_PlayBufferedSounds
 static void CG_PlayBufferedSounds( void ) {
 	if ( cg.soundTime < cg.time ) {
 		if (cg.soundBufferOut != cg.soundBufferIn && cg.soundBuffer[cg.soundBufferOut]) {
-			// q3as trap_S_StartLocalSound(cg.soundBuffer[cg.soundBufferOut], CHAN_ANNOUNCER);
-			trap_S_StartLocalSound(cg.soundBuffer[cg.soundBufferOut], CHAN_AUTO);	// q3as
+			cg.soundPlaying = cg.soundBuffer[cg.soundBufferOut];
+			trap_S_StartLocalSound( cg.soundPlaying, CHAN_ANNOUNCER );
 			cg.soundBuffer[cg.soundBufferOut] = 0;
 			cg.soundBufferOut = (cg.soundBufferOut + 1) % MAX_SOUNDBUFFER;
 			cg.soundTime = cg.time + 750;
+		} else {
+			cg.soundPlaying = 0;
 		}
 	}
 }
 
 //=========================================================================
+
+
+/*
+=================
+CG_FirstFrame
+
+Called once on first rendered frame
+=================
+*/
+static void CG_FirstFrame( void )
+{
+	CG_SetConfigValues();
+
+	cgs.voteTime = atoi( CG_ConfigString( CS_VOTE_TIME ) );
+	cgs.voteYes = atoi( CG_ConfigString( CS_VOTE_YES ) );
+	cgs.voteNo = atoi( CG_ConfigString( CS_VOTE_NO ) );
+	Q_strncpyz( cgs.voteString, CG_ConfigString( CS_VOTE_STRING ), sizeof( cgs.voteString ) );
+
+	if ( cgs.voteTime )
+		cgs.voteModified = qtrue;
+	else
+		cgs.voteModified = qfalse;
+}
+
 
 /*
 =================
@@ -748,7 +797,7 @@ void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView, qboolean demo
 
 	// update cvars
 	CG_UpdateCvars();
-	as_updateCvars();	// q3as
+	as_updateCvars();
 
 	// if we are only updating the screen as a loading
 	// pacifier, don't even try to read snapshots
@@ -777,14 +826,24 @@ void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView, qboolean demo
 	// let the client system know what our weapon and zoom settings are
 	trap_SetUserCmdValue( cg.weaponSelect, cg.zoomSensitivity );
 
-	// this counter will be bumped for every valid scene we generate
-	cg.clientFrame++;
+	if ( cg.clientFrame == 0 )
+		CG_FirstFrame();
 
 	// update cg.predictedPlayerState
 	CG_PredictPlayerState();
 
 	// decide on third person view
 	cg.renderingThirdPerson = cg_thirdPerson.integer || (cg.snap->ps.stats[STAT_HEALTH] <= 0);
+
+	CG_TrackClientTeamChange();
+
+	// follow killer
+	if ( cg.followTime && cg.followTime < cg.time ) {
+		cg.followTime = 0;
+		if ( !cg.demoPlayback ) {
+			trap_SendConsoleCommand( va( "follow %i\n", cg.followClient ) );
+		}
+	}
 
 	// build cg.refdef
 	inwater = CG_CalcViewValues();
@@ -796,7 +855,7 @@ void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView, qboolean demo
 
 	// build the render lists
 	if ( !cg.hyperspace ) {
-		CG_AddPacketEntities();			// adter calcViewValues, so predicted player state is correct
+		CG_AddPacketEntities();	// alter calcViewValues, so predicted player state is correct
 		CG_AddMarks();
 		CG_AddParticles ();
 		CG_AddLocalEntities();
@@ -806,8 +865,10 @@ void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView, qboolean demo
 	// add buffered sounds
 	CG_PlayBufferedSounds();
 
+#ifdef MISSIONPACK
 	// play buffered voice chats
 	CG_PlayBufferedVoiceChats();
+#endif
 
 	// finish up the rest of the refdef
 	if ( cg.testModelEntity.hModel ) {
@@ -850,10 +911,12 @@ void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView, qboolean demo
 	// actually issue the rendering calls
 	CG_DrawActive( stereoView );
 
+	// this counter will be bumped for every valid scene we generate
+	cg.clientFrame++;
+
 	if ( cg_stats.integer ) {
 		CG_Printf( "cg.clientFrame:%i\n", cg.clientFrame );
 	}
-
-
 }
+
 
