@@ -223,30 +223,6 @@ void CG_RailTrail( const clientInfo_t *ci, const vec3_t start, const vec3_t end 
  
 	VectorCopy(start, re->origin);
 	VectorCopy(end, re->oldorigin);
-
-	if ( sta_gTeamColoredRails.integer && cgs.gametype >= GT_TEAM )
-	{
-		if ( ci->team == TEAM_RED )
-		{
-			re->shaderRGBA[0] = 255;
-			re->shaderRGBA[1] = 0;
-			re->shaderRGBA[2] = 0;
-			le->color[0] = 0.75;
-			le->color[1] = 0;
-			le->color[2] = 0;
-		}
-		else // TEAM_BLUE
-		{
-			re->shaderRGBA[0] = 0;
-			re->shaderRGBA[1] = 0;
-			re->shaderRGBA[2] = 255;
-			le->color[0] = 0;
-			le->color[1] = 0;
-			le->color[2] = 0.75;
-		}
-	}
-	else
-	{
  
 	re->shaderRGBA[0] = ci->color1[0] * 255;
     re->shaderRGBA[1] = ci->color1[1] * 255;
@@ -257,7 +233,7 @@ void CG_RailTrail( const clientInfo_t *ci, const vec3_t start, const vec3_t end 
 	le->color[1] = ci->color1[1] * 0.75;
 	le->color[2] = ci->color1[2] * 0.75;
 	le->color[3] = 1.0f;
-	}	
+
 	AxisClear( re->axis );
  
 	if ( cg_oldRail.integer != 0 ) {
@@ -351,23 +327,6 @@ static void CG_RocketTrail( centity_t *ent, const weaponInfo_t *wi ) {
 		return;
 	}
 
-	// begin q3as
-	if (!strcmp(wi->item->classname, "weapon_rocketlauncher") && 
-		sta_gNoProjectileTrail.integer & ( 1 << NOTRAIL_RL)) {
-		return;
-	}
-	if ( !strcmp(wi->item->classname, "weapon_grenadelauncher") &&
-		sta_gNoProjectileTrail.integer & ( 1 << NOTRAIL_GL)) {
-		return;
-	}
-#ifdef MISSIONPACK
-	if ( !strcmp(wi->item->classname, "weapon_prox_launcher") &&
-		sta_gNoProjectileTrail.integer & ( 1 << NOTRAIL_PL)) {
-		return;
-	}
-#endif
-	// end q3as
-
 	up[0] = 0;
 	up[1] = 0;
 	up[2] = 0;
@@ -435,11 +394,6 @@ static void CG_NailTrail( centity_t *ent, const weaponInfo_t *wi ) {
 	if ( cg_noProjectileTrail.integer ) {
 		return;
 	}
-	// begin q3as
-	if ( sta_gNoProjectileTrail.integer & ( 1 << NOTRAIL_NG)) {
-		return;
-	}
-	// end q3as
 
 	up[0] = 0;
 	up[1] = 0;
@@ -2438,3 +2392,4 @@ void CG_Bullet( vec3_t end, int sourceEntityNum, vec3_t normal, qboolean flesh, 
 	}
 
 }
+
