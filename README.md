@@ -12,7 +12,7 @@ All files uploaded/created. Approximately 23% of file code changes have been com
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 **To-Do**
 
-Overhaul of files to with newer coding but with Q3AS elements added.
+Overhaul of files with newer coding but with Q3AS elements added.
 
 Include build folders and instructions.
 
