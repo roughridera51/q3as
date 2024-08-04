@@ -1235,7 +1235,7 @@ void CG_ParticleExplosion (char *animStr, vec3_t origin, vec3_t vel, int duratio
 			break;
 	}
 	if (!shaderAnimNames[anim]) {
-		CG_Error("CG_ParticleExplosion: unknown animation string: %s\n", animStr);
+		CG_Error("CG_ParticleExplosion: unknown animation string: %s", animStr);
 		return;
 	}
 
@@ -1632,8 +1632,8 @@ qboolean ValidBloodPool (vec3_t start)
 	vec3_t	angles;
 	vec3_t	right, up;
 	vec3_t	this_pos, x_pos, center_pos, end_pos;
-	float	x, y;
-	float	fwidth, fheight;
+	int		x, y;
+	int		fwidth, fheight;
 	trace_t	trace;
 	vec3_t	normal;
 
@@ -1659,7 +1659,7 @@ qboolean ValidBloodPool (vec3_t start)
 			CG_Trace (&trace, this_pos, NULL, NULL, end_pos, -1, CONTENTS_SOLID);
 
 			
-			if (trace.entityNum < (MAX_ENTITIES - 1)) // may only land on world
+			if (trace.entityNum < ENTITYNUM_WORLD) // may only land on world
 				return qfalse;
 
 			if (!(!trace.startsolid && trace.fraction < 1))
@@ -1995,3 +1995,4 @@ void CG_ParticleMisc (qhandle_t pshader, vec3_t origin, int size, int duration, 
 
 	p->rotate = qfalse;
 }
+
