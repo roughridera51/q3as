@@ -2,6 +2,11 @@
 //
 // cg_players.c -- handle the media and animation for player entities
 #include "cg_local.h"
+#include "cg_q3as.h"		// q3as
+
+// q3as
+extern void CG_ForceModelChange( void );
+// end q3as
 
 #define	PM_SKIN "pm"
 
@@ -827,6 +832,9 @@ static void CG_LoadClientInfo( clientInfo_t *ci ) {
 		if ( cg_entities[i].currentState.clientNum == clientNum
 			&& cg_entities[i].currentState.eType == ET_PLAYER ) {
 			CG_ResetPlayerEntity( &cg_entities[i] );
+			// q3as - for force team/enemymodels
+			CG_ForceModelChange();
+			// end q3as
 		}
 	}
 
@@ -2248,6 +2256,15 @@ static void CG_PlayerSprites( centity_t *cent ) {
 		}
 		return;
 	}
+	// begin q3as -- above code implements this
+	if ( !( cent->currentState.eFlags & EF_DEAD ) && cg_drawFriend.integer &&
+		cg.clientNum !=cent->currentState.clientNum && // don't draw above MY head, for thirdperson view
+		(( cg.snap->ps.persistant[PERS_TEAM] == team &&	cgs.gametype >= GT_TEAM) ||
+		( cg.snap->ps.persistant[PERS_TEAM] == TEAM_SPECTATOR && sta_gSpectatorJerseys.integer ))) {
+			CG_PlayerFloatSprite( cent, cgs.q3as.media.friendShaders[cent->currentState.clientNum] );
+			return;
+	}
+	// end q3as
 }
 
 
