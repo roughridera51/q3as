@@ -1,6 +1,6 @@
 // Defines
 #define NUM_TEAM_JERSEYS	35
-#define EUI_VERSION			"1.0d"
+#define EUI_VERSION			"1.32e"
 
 #define	LAG_SAMPLES			128
 #define	MAX_LAGOMETER_PING	900
