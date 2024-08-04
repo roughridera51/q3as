@@ -33,13 +33,12 @@ typedef struct {
 	int				serverCommandSequence;	// snapshot becomes current
 } snapshot_t;
 
-enum {
+typedef enum {
   CGAME_EVENT_NONE,
   CGAME_EVENT_TEAMMENU,
   CGAME_EVENT_SCOREBOARD,
   CGAME_EVENT_EDITHUD
-};
-
+} cgame_event_t;
 
 /*
 ==================================================================
@@ -142,7 +141,7 @@ typedef enum {
 	CG_GET_ENTITY_TOKEN,
 	CG_R_ADDPOLYSTOSCENE,
 	CG_R_INPVS,
-        // 1.32
+	// 1.32
 	CG_FS_SEEK,
 
 /*
@@ -158,17 +157,11 @@ typedef enum {
 	CG_COS,
 	CG_ATAN2,
 	CG_SQRT,
-	CG_FLOOR = 107,
+	CG_FLOOR,
 	CG_CEIL,
 	CG_TESTPRINTINT,
 	CG_TESTPRINTFLOAT,
-	CG_ACOS,
-        // engine extensions
-	CG_R_ADDREFENTITYTOSCENE2,
-	CG_R_FORCEFIXEDDLIGHTS,
-	CG_R_ADDLINEARLIGHTTOSCENE,
-	CG_IS_RECORDING_DEMO,
-	CG_TRAP_GETVALUE = COM_TRAP_GETVALUE,
+	CG_ACOS
 } cgameImport_t;
 
 
