@@ -5,6 +5,7 @@
 // be a valid snapshot this frame
 
 #include "cg_local.h"
+#include "cg_q3as.h"	// q3as
 
 #ifdef MISSIONPACK // bk001204
 #include "../../ui/menudef.h" // bk001205 - for Q3_ui as well
@@ -142,6 +143,7 @@ void CG_ParseServerinfo( void ) {
 	Com_sprintf( cgs.mapname, sizeof( cgs.mapname ), "maps/%s.bsp", mapname );
 	Q_strncpyz( cgs.redTeam, Info_ValueForKey( info, "g_redTeam" ), sizeof(cgs.redTeam) );
 	Q_strncpyz( cgs.blueTeam, Info_ValueForKey( info, "g_blueTeam" ), sizeof(cgs.blueTeam) );
+	Q_strncpyz( cgs.q3as.esv, Info_ValueForKey( info, "as_version" ), sizeof(cgs.q3as.esv) );
 }
 
 
@@ -1141,6 +1143,22 @@ static void CG_ServerCommand( void ) {
 			return;
 		}
 	}
+	// begin q3as
+	if ( !strcmp( cmd, "cpy" ) ) {
+		int			where;
+		char		text[1000];
+
+		where = atoi(CG_Argv(1));
+		Q_strncpyz(text, CG_Argv(2), sizeof(text));
+		CG_CenterPrint( text, where, BIGCHAR_WIDTH );
+		return;
+	}
+
+	if ( !strcmp( cmd, "rates" ) ) {
+		as_loadWeaponRates();
+		return;
+	}
+	// end q3as
 
 	CG_Printf( "Unknown client game command: %s\n", cmd );
 }
