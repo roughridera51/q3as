@@ -7,7 +7,7 @@ Also, while using baseq3a, this has various security fixes along with unlagged f
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 **What Has Been Done So far**
 
-All files uploaded/created, approximately 23% has been completed.
+All files uploaded/created. Approximately 23% of file code changes have been completed.
 
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 **To-Do**
