@@ -5,8 +5,9 @@
 // be a valid snapshot this frame
 
 #include "cg_local.h"
+
+#ifdef MISSIONPACK // bk001204
 #include "../../ui/menudef.h" // bk001205 - for Q3_ui as well
-#include "cg_q3as.h"	// q3as
 
 typedef struct {
 	const char *order;
@@ -27,7 +28,6 @@ static const orderTask_t validOrders[] = {
 
 static const int numValidOrders = sizeof(validOrders) / sizeof(orderTask_t);
 
-#ifdef MISSIONPACK // bk001204
 static int CG_ValidOrder(const char *p) {
 	int i;
 	for (i = 0; i < numValidOrders; i++) {
@@ -68,7 +68,7 @@ static void CG_ParseScores( void ) {
 		cg.scores[i].accuracy = atoi(CG_Argv(i * 14 + 10));
 		cg.scores[i].impressiveCount = atoi(CG_Argv(i * 14 + 11));
 		cg.scores[i].excellentCount = atoi(CG_Argv(i * 14 + 12));
-		cg.scores[i].guantletCount = atoi(CG_Argv(i * 14 + 13));
+		cg.scores[i].gauntletCount = atoi(CG_Argv(i * 14 + 13));
 		cg.scores[i].defendCount = atoi(CG_Argv(i * 14 + 14));
 		cg.scores[i].assistCount = atoi(CG_Argv(i * 14 + 15));
 		cg.scores[i].perfect = atoi(CG_Argv(i * 14 + 16));
@@ -85,13 +85,12 @@ static void CG_ParseScores( void ) {
 #ifdef MISSIONPACK
 	CG_SetScoreSelection(NULL);
 #endif
-
 }
+
 
 /*
 =================
 CG_ParseTeamInfo
-
 =================
 */
 static void CG_ParseTeamInfo( void ) {
@@ -99,9 +98,13 @@ static void CG_ParseTeamInfo( void ) {
 	int		client;
 
 	numSortedTeamPlayers = atoi( CG_Argv( 1 ) );
+	if( (unsigned) numSortedTeamPlayers > TEAM_MAXOVERLAY )
+		numSortedTeamPlayers = TEAM_MAXOVERLAY;
 
 	for ( i = 0 ; i < numSortedTeamPlayers ; i++ ) {
 		client = atoi( CG_Argv( i * 6 + 2 ) );
+		if ( (unsigned) client >= MAX_CLIENTS )
+			continue;
 
 		sortedTeamPlayers[i] = client;
 
@@ -128,7 +131,7 @@ void CG_ParseServerinfo( void ) {
 
 	info = CG_ConfigString( CS_SERVERINFO );
 	cgs.gametype = atoi( Info_ValueForKey( info, "g_gametype" ) );
-	trap_Cvar_Set("g_gametype", va("%i", cgs.gametype));
+	trap_Cvar_Set( "ui_gametype", va( "%i", cgs.gametype ) );
 	cgs.dmflags = atoi( Info_ValueForKey( info, "dmflags" ) );
 	cgs.teamflags = atoi( Info_ValueForKey( info, "teamflags" ) );
 	cgs.fraglimit = atoi( Info_ValueForKey( info, "fraglimit" ) );
@@ -138,12 +141,26 @@ void CG_ParseServerinfo( void ) {
 	mapname = Info_ValueForKey( info, "mapname" );
 	Com_sprintf( cgs.mapname, sizeof( cgs.mapname ), "maps/%s.bsp", mapname );
 	Q_strncpyz( cgs.redTeam, Info_ValueForKey( info, "g_redTeam" ), sizeof(cgs.redTeam) );
-	trap_Cvar_Set("g_redTeam", cgs.redTeam);
 	Q_strncpyz( cgs.blueTeam, Info_ValueForKey( info, "g_blueTeam" ), sizeof(cgs.blueTeam) );
-	trap_Cvar_Set("g_blueTeam", cgs.blueTeam);
-	Q_strncpyz( cgs.q3as.esv, Info_ValueForKey( info, "as_version" ), sizeof(cgs.q3as.esv) );	// q3as
-	// cgs.q3as.esv = atof(Info_ValueForKey( info, "as_version" ));	// q3as
 }
+
+
+void CG_ParseSysteminfo( void ) {
+	const char	*info;
+
+	info = CG_ConfigString( CS_SYSTEMINFO );
+
+	cgs.pmove_fixed = ( atoi( Info_ValueForKey( info, "pmove_fixed" ) ) ) ? qtrue : qfalse;
+	cgs.pmove_msec = atoi( Info_ValueForKey( info, "pmove_msec" ) );
+	if ( cgs.pmove_msec < 8 ) {
+		cgs.pmove_msec = 8;
+	} else if ( cgs.pmove_msec > 33 ) {
+		cgs.pmove_msec = 33;
+	}
+
+	cgs.synchronousClients = ( atoi( Info_ValueForKey( info, "g_synchronousClients" ) ) ) ? qtrue : qfalse;
+}
+
 
 /*
 ==================
@@ -159,6 +176,22 @@ static void CG_ParseWarmup( void ) {
 	warmup = atoi( info );
 	cg.warmupCount = -1;
 
+	if ( warmup ) {
+		cg.timelimitWarnings |= 1 | 2 | 4;
+		cg.fraglimitWarnings |= 1 | 2 | 4;
+	}
+
+	if ( cg.clientFrame == 0 ) {
+		if ( warmup == 0 && cgs.gametype != GT_SINGLE_PLAYER ) {
+			if ( cg.snap && ( cg.snap->ps.persistant[PERS_TEAM] != TEAM_SPECTATOR || cg.snap->ps.pm_flags & PMF_FOLLOW ) ) {
+				// force sound playback in CG_WarmupEvents()
+				cg.warmup = cg.time;
+				cg.warmupCount = -2; // special value to silent FIGHT sound for demo playback
+			}
+			return;
+		}
+	}
+
 	if ( warmup == 0 && cg.warmup ) {
 
 	} else if ( warmup > 0 && cg.warmup <= 0 ) {
@@ -168,12 +201,17 @@ static void CG_ParseWarmup( void ) {
 		} else
 #endif
 		{
-			trap_S_StartLocalSound( cgs.media.countPrepareSound, CHAN_ANNOUNCER );
+			if ( cg.soundPlaying != cgs.media.countPrepareSound ) {
+				CG_AddBufferedSound( -1 );
+				CG_AddBufferedSound( cgs.media.countPrepareSound );
+				cg.soundTime = cg.time + 1; // play in next frame
+			}
 		}
 	}
 
 	cg.warmup = warmup;
 }
+
 
 /*
 ================
@@ -199,8 +237,9 @@ void CG_SetConfigValues( void ) {
 		cgs.flagStatus = s[0] - '0';
 	}
 #endif
-	cg.warmup = atoi( CG_ConfigString( CS_WARMUP ) );
+	CG_ParseWarmup();
 }
+
 
 /*
 =====================
@@ -216,20 +255,20 @@ void CG_ShaderStateChanged(void) {
 
 	o = CG_ConfigString( CS_SHADERSTATE );
 	while (o && *o) {
-		n = strstr(o, "=");
-		if (n && *n) {
+		n = strchr(o, '=');
+		if (n) {
 			strncpy(originalShader, o, n-o);
-			originalShader[n-o] = 0;
+			originalShader[n-o] = '\0';
 			n++;
-			t = strstr(n, ":");
-			if (t && *t) {
+			t = strchr(n, ':');
+			if (t) {
 				strncpy(newShader, n, t-n);
-				newShader[t-n] = 0;
+				newShader[t-n] = '\0';
 			} else {
 				break;
 			}
 			t++;
-			o = strstr(t, "@");
+			o = strchr(t, '@');
 			if (o) {
 				strncpy(timeOffset, t, o-t);
 				timeOffset[o-t] = 0;
@@ -241,6 +280,7 @@ void CG_ShaderStateChanged(void) {
 		}
 	}
 }
+
 
 /*
 ================
@@ -264,6 +304,8 @@ static void CG_ConfigStringModified( void ) {
 	// do something with it if necessary
 	if ( num == CS_MUSIC ) {
 		CG_StartMusic();
+	} else if ( num == CS_SYSTEMINFO ) {
+		CG_ParseSysteminfo();
 	} else if ( num == CS_SERVERINFO ) {
 		CG_ParseServerinfo();
 	} else if ( num == CS_WARMUP ) {
@@ -298,7 +340,7 @@ static void CG_ConfigStringModified( void ) {
 		cgs.teamVoteNo[num-CS_TEAMVOTE_NO] = atoi( str );
 		cgs.teamVoteModified[num-CS_TEAMVOTE_NO] = qtrue;
 	} else if ( num >= CS_TEAMVOTE_STRING && num <= CS_TEAMVOTE_STRING + 1) {
-		Q_strncpyz( cgs.teamVoteString[num-CS_TEAMVOTE_STRING], str, sizeof( cgs.teamVoteString ) );
+		Q_strncpyz( cgs.teamVoteString[num-CS_TEAMVOTE_STRING], str, sizeof( cgs.teamVoteString[0] ) );
 #ifdef MISSIONPACK
 		trap_S_StartLocalSound( cgs.media.voteNow, CHAN_ANNOUNCER );
 #endif
@@ -306,8 +348,7 @@ static void CG_ConfigStringModified( void ) {
 		cg.intermissionStarted = atoi( str );
 	} else if ( num >= CS_MODELS && num < CS_MODELS+MAX_MODELS ) {
 		cgs.gameModels[ num-CS_MODELS ] = trap_R_RegisterModel( str );
-	// q3as } else if ( num >= CS_SOUNDS && num < CS_SOUNDS+MAX_MODELS ) {
-		} else if ( num >= CS_SOUNDS && num < CS_SOUNDS+MAX_SOUNDS ) {		// q3as - bugfix; thanks to Dementor/Q3W
+	} else if ( num >= CS_SOUNDS && num < CS_SOUNDS+MAX_SOUNDS ) {
 		if ( str[0] != '*' ) {	// player specific sounds don't register here
 			cgs.gameSounds[ num-CS_SOUNDS] = trap_S_RegisterSound( str, qfalse );
 		}
@@ -386,21 +427,9 @@ static void CG_AddToTeamChat( const char *str ) {
 		}
 
 		if ( Q_IsColorString( str ) ) {
-			// TA EUI - HTML color ^XRRGGBB
-			if ( *( str + 1 ) == 'X')
-			{
-				*p++ = *str++;
-				lastcolor = *str;
-				*p++ = *str++;
-			}
-			else
-			{
-
-				*p++ = *str++;
-				lastcolor = *str;
-				*p++ = *str++;
-			}
-			// end TA EUI
+			*p++ = *str++;
+			lastcolor = *str;
+			*p++ = *str++;
 			continue;
 		}
 		if (*str == ' ') {
@@ -440,10 +469,12 @@ static void CG_MapRestart( void ) {
 
 	// make sure the "3 frags left" warnings play again
 	cg.fraglimitWarnings = 0;
-
 	cg.timelimitWarnings = 0;
 
+	cg.rewardTime = 0;
+	cg.rewardStack = 0;
 	cg.intermissionStarted = qfalse;
+	cg.levelShot = qfalse;
 
 	cgs.voteTime = 0;
 
@@ -451,25 +482,32 @@ static void CG_MapRestart( void ) {
 
 	CG_StartMusic();
 
-	trap_S_ClearLoopingSounds(qtrue);
+	trap_S_ClearLoopingSounds( qtrue );
+
+	cg.allowPickupPrediction = cg.time + PICKUP_PREDICTION_DELAY;
 
 	// we really should clear more parts of cg here and stop sounds
 
 	// play the "fight" sound if this is a restart without warmup
-	if ( cg.warmup == 0 /* && cgs.gametype == GT_TOURNAMENT */) {
-		trap_S_StartLocalSound( cgs.media.countFightSound, CHAN_ANNOUNCER );
-		CG_CenterPrint( "FIGHT!", 120, GIANTCHAR_WIDTH*2 );
+	if ( cg.warmup == 0 /* && cgs.gametype == GT_TOURNAMENT */ ) {
+		// force sound playback in CG_WarmupEvents()
+		cg.warmup = cg.time;
+		cg.warmupCount = -1;
 	}
+
 #ifdef MISSIONPACK
 	if (cg_singlePlayerActive.integer) {
 		trap_Cvar_Set("ui_matchStartTime", va("%i", cg.time));
-		if (cg_recordSPDemo.integer && cg_recordSPDemoName.string && *cg_recordSPDemoName.string) {
+		if (cg_recordSPDemo.integer && *cg_recordSPDemoName.string) {
 			trap_SendConsoleCommand(va("set g_synchronousclients 1 ; record %s \n", cg_recordSPDemoName.string));
 		}
 	}
 #endif
-	trap_Cvar_Set("cg_thirdPerson", "0");
+
+	trap_Cvar_Set( "cg_thirdPerson", "0" );
 }
+
+#ifdef MISSIONPACK
 
 #define MAX_VOICEFILESIZE	16384
 #define MAX_VOICEFILES		8
@@ -516,6 +554,7 @@ int CG_ParseVoiceChats( const char *filename, voiceChatList_t *voiceChatList, in
 	char *token;
 	voiceChat_t *voiceChats;
 	qboolean compress;
+	sfxHandle_t sound;
 
 	compress = qtrue;
 	if (cg_buildScript.integer) {
@@ -523,7 +562,7 @@ int CG_ParseVoiceChats( const char *filename, voiceChatList_t *voiceChatList, in
 	}
 
 	len = trap_FS_FOpenFile( filename, &f, FS_READ );
-	if ( !f ) {
+	if ( f == FS_INVALID_HANDLE ) {
 		trap_Print( va( S_COLOR_RED "voice chat file not found: %s\n", filename ) );
 		return qfalse;
 	}
@@ -546,7 +585,7 @@ int CG_ParseVoiceChats( const char *filename, voiceChatList_t *voiceChatList, in
 		voiceChats[i].id[0] = 0;
 	}
 	token = COM_ParseExt(p, qtrue);
-	if (!token || token[0] == 0) {
+	if (token[0] == '\0') {
 		return qtrue;
 	}
 	if (!Q_stricmp(token, "female")) {
@@ -566,7 +605,7 @@ int CG_ParseVoiceChats( const char *filename, voiceChatList_t *voiceChatList, in
 	voiceChatList->numVoiceChats = 0;
 	while ( 1 ) {
 		token = COM_ParseExt(p, qtrue);
-		if (!token || token[0] == 0) {
+		if (token[0] == '\0') {
 			return qtrue;
 		}
 		Com_sprintf(voiceChats[voiceChatList->numVoiceChats].id, sizeof( voiceChats[voiceChatList->numVoiceChats].id ), "%s", token);
@@ -578,20 +617,21 @@ int CG_ParseVoiceChats( const char *filename, voiceChatList_t *voiceChatList, in
 		voiceChats[voiceChatList->numVoiceChats].numSounds = 0;
 		while(1) {
 			token = COM_ParseExt(p, qtrue);
-			if (!token || token[0] == 0) {
+			if (token[0] == '\0') {
 				return qtrue;
 			}
 			if (!Q_stricmp(token, "}"))
 				break;
-			voiceChats[voiceChatList->numVoiceChats].sounds[voiceChats[voiceChatList->numVoiceChats].numSounds] = 
-          trap_S_RegisterSound( token , compress );
+			sound = trap_S_RegisterSound( token, compress );
+			voiceChats[voiceChatList->numVoiceChats].sounds[voiceChats[voiceChatList->numVoiceChats].numSounds] = sound;
 			token = COM_ParseExt(p, qtrue);
-			if (!token || token[0] == 0) {
+			if (token[0] == '\0') {
 				return qtrue;
 			}
 			Com_sprintf(voiceChats[voiceChatList->numVoiceChats].chats[
 							voiceChats[voiceChatList->numVoiceChats].numSounds], MAX_CHATSIZE, "%s", token);
-			voiceChats[voiceChatList->numVoiceChats].numSounds++;
+			if (sound)
+				voiceChats[voiceChatList->numVoiceChats].numSounds++;
 			if (voiceChats[voiceChatList->numVoiceChats].numSounds >= MAX_VOICESOUNDS)
 				break;
 		}
@@ -635,7 +675,7 @@ int CG_HeadModelVoiceChats( char *filename ) {
 	char *token;
 
 	len = trap_FS_FOpenFile( filename, &f, FS_READ );
-	if ( !f ) {
+	if ( f == FS_INVALID_HANDLE ) {
 		//trap_Print( va( "voice chat file not found: %s\n", filename ) );
 		return -1;
 	}
@@ -653,7 +693,7 @@ int CG_HeadModelVoiceChats( char *filename ) {
 	p = &ptr;
 
 	token = COM_ParseExt(p, qtrue);
-	if (!token || token[0] == 0) {
+	if ( token[0] == '\0' ) {
 		return -1;
 	}
 
@@ -687,6 +727,7 @@ int CG_GetVoiceChat( voiceChatList_t *voiceChatList, const char *id, sfxHandle_t
 	}
 	return qfalse;
 }
+
 
 /*
 =================
@@ -799,7 +840,7 @@ CG_PlayVoiceChat
 =================
 */
 void CG_PlayVoiceChat( bufferedVoiceChat_t *vchat ) {
-#ifdef MISSIONPACK
+
 	// if we are going into the intermission, don't start any voices
 	if ( cg.intermissionStarted ) {
 		return;
@@ -824,8 +865,8 @@ void CG_PlayVoiceChat( bufferedVoiceChat_t *vchat ) {
 		CG_Printf( "%s\n", vchat->message );
 	}
 	voiceChatBuffer[cg.voiceChatBufferOut].snd = 0;
-#endif
 }
+
 
 /*
 =====================
@@ -833,7 +874,6 @@ CG_PlayBufferedVoieChats
 =====================
 */
 void CG_PlayBufferedVoiceChats( void ) {
-#ifdef MISSIONPACK
 	if ( cg.voiceChatTime < cg.time ) {
 		if (cg.voiceChatBufferOut != cg.voiceChatBufferIn && voiceChatBuffer[cg.voiceChatBufferOut].snd) {
 			//
@@ -843,8 +883,8 @@ void CG_PlayBufferedVoiceChats( void ) {
 			cg.voiceChatTime = cg.time + 1000;
 		}
 	}
-#endif
 }
+
 
 /*
 =====================
@@ -852,7 +892,7 @@ CG_AddBufferedVoiceChat
 =====================
 */
 void CG_AddBufferedVoiceChat( bufferedVoiceChat_t *vchat ) {
-#ifdef MISSIONPACK
+
 	// if we are going into the intermission, don't start any voices
 	if ( cg.intermissionStarted ) {
 		return;
@@ -864,8 +904,8 @@ void CG_AddBufferedVoiceChat( bufferedVoiceChat_t *vchat ) {
 		CG_PlayVoiceChat( &voiceChatBuffer[cg.voiceChatBufferOut] );
 		cg.voiceChatBufferOut++;
 	}
-#endif
 }
+
 
 /*
 =================
@@ -873,7 +913,7 @@ CG_VoiceChatLocal
 =================
 */
 void CG_VoiceChatLocal( int mode, qboolean voiceOnly, int clientNum, int color, const char *cmd ) {
-#ifdef MISSIONPACK
+
 	char *chat;
 	voiceChatList_t *voiceChatList;
 	clientInfo_t *ci;
@@ -913,8 +953,8 @@ void CG_VoiceChatLocal( int mode, qboolean voiceOnly, int clientNum, int color, 
 			CG_AddBufferedVoiceChat(&vchat);
 		}
 	}
-#endif
 }
+
 
 /*
 =================
@@ -922,7 +962,6 @@ CG_VoiceChat
 =================
 */
 void CG_VoiceChat( int mode ) {
-#ifdef MISSIONPACK
 	const char *cmd;
 	int clientNum, color;
 	qboolean voiceOnly;
@@ -941,8 +980,9 @@ void CG_VoiceChat( int mode ) {
 	}
 
 	CG_VoiceChatLocal( mode, voiceOnly, clientNum, color, cmd );
-#endif
 }
+#endif // MISSIONPACK
+
 
 /*
 =================
@@ -956,10 +996,12 @@ static void CG_RemoveChatEscapeChar( char *text ) {
 	for ( i = 0; text[i]; i++ ) {
 		if (text[i] == '\x19')
 			continue;
-		text[l++] = text[i];
+		text[l] = text[i];
+		l++;
 	}
 	text[l] = '\0';
 }
+
 
 /*
 =================
@@ -970,7 +1012,7 @@ Cmd_Argc() / Cmd_Argv()
 =================
 */
 static void CG_ServerCommand( void ) {
-	const char	*cmd;
+	const char	*cmd, *id;
 	char		text[MAX_SAY_TEXT];
 
 	cmd = CG_Argv(0);
@@ -1009,7 +1051,11 @@ static void CG_ServerCommand( void ) {
 			trap_S_StartLocalSound( cgs.media.talkSound, CHAN_LOCAL_SOUND );
 			Q_strncpyz( text, CG_Argv(1), MAX_SAY_TEXT );
 			CG_RemoveChatEscapeChar( text );
-			CG_Printf( "%s\n", text );
+			id = CG_Argv( 2 );
+			if ( *id >= '0' && *id <= '9' )
+				CG_Printf( "(%i) %s\n", atoi( id ), text );
+			else
+				CG_Printf( "%s\n", text );
 		}
 		return;
 	}
@@ -1019,9 +1065,15 @@ static void CG_ServerCommand( void ) {
 		Q_strncpyz( text, CG_Argv(1), MAX_SAY_TEXT );
 		CG_RemoveChatEscapeChar( text );
 		CG_AddToTeamChat( text );
-		CG_Printf( "%s\n", text );
+		id = CG_Argv( 2 );
+		if ( *id >= '0' && *id <= '9' )
+			CG_Printf( "(%i) %s\n", atoi( id ), text );
+		else
+			CG_Printf( "%s\n", text );
 		return;
 	}
+
+#ifdef MISSIONPACK
 	if ( !strcmp( cmd, "vchat" ) ) {
 		CG_VoiceChat( SAY_ALL );
 		return;
@@ -1036,6 +1088,7 @@ static void CG_ServerCommand( void ) {
 		CG_VoiceChat( SAY_TELL );
 		return;
 	}
+#endif
 
 	if ( !strcmp( cmd, "scores" ) ) {
 		CG_ParseScores();
@@ -1052,14 +1105,26 @@ static void CG_ServerCommand( void ) {
 		return;
 	}
 
-  if ( Q_stricmp (cmd, "remapShader") == 0 ) {
-		if (trap_Argc() == 4) {
-			trap_R_RemapShader(CG_Argv(1), CG_Argv(2), CG_Argv(3));
+	if ( Q_stricmp (cmd, "remapShader") == 0 )
+	{
+		if (trap_Argc() == 4)
+		{
+			char shader1[MAX_QPATH];
+			char shader2[MAX_QPATH];
+			char shader3[MAX_QPATH];
+
+			Q_strncpyz(shader1, CG_Argv(1), sizeof(shader1));
+			Q_strncpyz(shader2, CG_Argv(2), sizeof(shader2));
+			Q_strncpyz(shader3, CG_Argv(3), sizeof(shader3));
+
+			trap_R_RemapShader(shader1, shader2, shader3);
 		}
+		
+		return;
 	}
 
 	// loaddeferred can be both a servercmd and a consolecmd
-	if ( !strcmp( cmd, "loaddefered" ) ) {	// FIXME: spelled wrong, but not changing for demo
+	if ( !strcmp( cmd, "loaddeferred" ) ) {	// FIXME: spelled wrong, but not changing for demo
 		CG_LoadDeferredPlayers();
 		return;
 	}
@@ -1071,22 +1136,11 @@ static void CG_ServerCommand( void ) {
 		return;
 	}
 
-	// begin q3as
-	if ( !strcmp( cmd, "cpy" ) ) {
-		int			where;
-		char		text[1000];
-
-		where = atoi(CG_Argv(1));
-		Q_strncpyz(text, CG_Argv(2), sizeof(text));
-		CG_CenterPrint( text, where, BIGCHAR_WIDTH );
-		return;
+	if ( cgs.defrag && cg.demoPlayback ) {
+		if ( !strcmp( cmd, "aswitch" ) || !strcmp( cmd, "stats" ) ) {
+			return;
+		}
 	}
-
-	if ( !strcmp( cmd, "rates" ) ) {
-		as_loadWeaponRates();
-		return;
-	}
-	// end q3as
 
 	CG_Printf( "Unknown client game command: %s\n", cmd );
 }
@@ -1107,3 +1161,4 @@ void CG_ExecuteNewServerCommands( int latestSequence ) {
 		}
 	}
 }
+
