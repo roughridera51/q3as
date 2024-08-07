@@ -223,7 +223,7 @@ void CG_RailTrail( const clientInfo_t *ci, const vec3_t start, const vec3_t end 
  
 	VectorCopy(start, re->origin);
 	VectorCopy(end, re->oldorigin);
- 
+        //Start here for q3as rail code changes
 	re->shaderRGBA[0] = ci->color1[0] * 255;
     re->shaderRGBA[1] = ci->color1[1] * 255;
     re->shaderRGBA[2] = ci->color1[2] * 255;
@@ -326,7 +326,8 @@ static void CG_RocketTrail( centity_t *ent, const weaponInfo_t *wi ) {
 	if ( cg_noProjectileTrail.integer ) {
 		return;
 	}
-
+	//start here for q3as rocket code changes
+        //insert code changes between these comments
 	up[0] = 0;
 	up[1] = 0;
 	up[2] = 0;
